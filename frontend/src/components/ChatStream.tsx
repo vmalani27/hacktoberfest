@@ -150,19 +150,21 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
       {/* Input section with Quick Suggestions */}
       <div className="p-4 border-t border-slate-800/80 bg-slate-900/60 backdrop-blur-md">
         <div className="max-w-3xl mx-auto space-y-2.5">
-          {/* Subtle Suggestion Chips */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
-            {QUICK_SUGGESTIONS.map((sug) => (
-              <button
-                key={sug.label}
-                onClick={() => onSendMessage(sug.prompt)}
-                disabled={loading}
-                className="whitespace-nowrap px-2.5 py-1 rounded-lg border border-slate-800 bg-slate-950/60 hover:bg-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 transition-all active:scale-95"
-              >
-                {sug.label}
-              </button>
-            ))}
-          </div>
+          {/* Subtle Suggestion Chips (only shown when not waiting on an interactive card) */}
+          {!currentToolCall && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+              {QUICK_SUGGESTIONS.map((sug) => (
+                <button
+                  key={sug.label}
+                  onClick={() => onSendMessage(sug.prompt)}
+                  disabled={loading}
+                  className="whitespace-nowrap px-2.5 py-1 rounded-lg border border-slate-800 bg-slate-950/60 hover:bg-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 transition-all active:scale-95"
+                >
+                  {sug.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Chat input field */}
           <div className="flex items-center gap-2 bg-slate-950/90 border border-slate-800/90 rounded-2xl px-3.5 py-1.5 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all shadow-inner">

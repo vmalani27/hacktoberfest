@@ -117,7 +117,7 @@ async def submit_answer(session_id: str, ans: InterviewAnswer):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     session.answers[ans.question_id] = ans.answer
-    session.messages.append(ChatMessage(role="user", content=f"User selection for {ans.question_id}: {ans.answer}"))
+    session.messages.append(ChatMessage(role="user", content=ans.answer))
     if session.current_tool_call and session.current_tool_call.tool_name == "ask_user":
         session.current_tool_call = None
     session.stage = StageEnum.EXECUTE

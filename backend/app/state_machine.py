@@ -264,13 +264,7 @@ class SessionManager:
         status_resp.completed = True
 
         # Initialize Session State
-        initial_content = (
-            f"This looks like a **{detected_stack}** (default port `{detected_port}`). "
-            f"I've provisioned an isolated workspace sandbox separate from your machine and accounts. "
-            f"Your private files and host environment are untouched.\n\n"
-            f"Let's get this containerized and running! Before drafting the Dockerfile, does this application connect to a "
-            f"companion database (like PostgreSQL, MongoDB, Redis) or is it completely stateless?"
-        )
+        initial_content = f"Identified **{detected_stack}** (default port `{detected_port}`). Provisioned an isolated sandbox for your build."
 
         session = SessionState(
             session_id=session_id,
@@ -325,7 +319,7 @@ class SessionManager:
 
         return self.initialize_workspace_sync(session_id=sid, repo_url=repo_url, local_path=repo_path)
 
-    async def step(self, session_id: str) -> SessionState:
+    async def step(self, session_id: str, extra_instruction: Optional[str] = None) -> SessionState:
         session = self.sessions.get(session_id)
         if not session or not session.is_active:
             return session
@@ -346,6 +340,8 @@ class SessionManager:
         for m in session.messages:
             if m.role in ["user", "assistant"]:
                 history.append({"role": m.role, "content": m.content})
+        if extra_instruction:
+            history.append({"role": "user", "content": extra_instruction})
 
         # Autonomous tool-use loop (handles readonly inspection tools like list_dir and read_file)
         for loop_idx in range(4):
@@ -455,10 +451,9 @@ class SessionManager:
             if "dockerfile" in fname.lower():
                 next_prompt = "Applied `Dockerfile` successfully. Now IMMEDIATELY generate `docker-compose.yml` by invoking the `write_file` tool call (Remember: ZERO host mounts; no volumes: - .:/app)."
             elif "compose" in fname.lower():
-                next_prompt = "Applied `docker-compose.yml` successfully. Now IMMEDIATELY generate `.env.example` if variables are needed, or propose building and verifying using `run_command` (e.g. `docker compose build && docker compose up -d`)."
+                next_prompt = "Applied `docker-compose.yml` successfully. Now propose building and verifying using `run_command` (e.g. `docker compose build && docker compose up -d`)."
             else:
                 next_prompt = f"Applied `{fname}` successfully. Propose container verification using `run_command`."
-            session.messages.append(ChatMessage(role="user", content=next_prompt))
             session.stage = StageEnum.EXECUTE
         elif tc.tool_name == "run_command":
             if result.get("success"):
@@ -471,10 +466,7 @@ class SessionManager:
                     role="assistant",
                     content="🎉 Verified command executed successfully inside the sandbox container!"
                 ))
-                session.messages.append(ChatMessage(
-                    role="user",
-                    content=f"Command `{args.get('command')}` executed successfully with exit code 0."
-                ))
+                next_prompt = f"Command `{args.get('command')}` executed successfully with exit code 0. Now verify the service or transition to EXPORT."
                 session.stage = StageEnum.VERIFY
 
                 # Generate updated PLAYBOOK.md
@@ -498,7 +490,7 @@ class SessionManager:
                     ))
 
         session.current_tool_call = None
-        return await self.step(session_id)
+        return await self.step(session_id, extra_instruction=next_prompt if "next_prompt" in locals() else None)
 
     def teardown_session(self, session_id: str) -> Dict[str, Any]:
         """Completely destroys the disposable workspace container and files."""
