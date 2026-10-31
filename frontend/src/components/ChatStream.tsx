@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bot, User, ArrowUp, Sparkles, Copy, Check } from 'lucide-react';
-import { ChatMessage, ToolCall } from '../types';
+import { ChatMessage, ToolCall, SessionState } from '../types';
+import { WorkspaceCard } from './WorkspaceCard';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
 
 interface ChatStreamProps {
+  session?: SessionState | null;
   messages: ChatMessage[];
   currentToolCall?: ToolCall | null;
   onSendMessage: (text: string) => void;
@@ -12,6 +14,9 @@ interface ChatStreamProps {
   onReject: (toolCallId: string, feedback?: string) => void;
   onSubmitAnswer: (questionId: string, answer: string) => void;
   loading: boolean;
+  onToggleTerminal?: () => void;
+  onToggleFiles?: () => void;
+  isTerminalOpen?: boolean;
 }
 
 const QUICK_SUGGESTIONS = [
@@ -22,6 +27,7 @@ const QUICK_SUGGESTIONS = [
 ];
 
 export const ChatStream: React.FC<ChatStreamProps> = ({
+  session,
   messages,
   currentToolCall,
   onSendMessage,
@@ -29,6 +35,9 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   onReject,
   onSubmitAnswer,
   loading,
+  onToggleTerminal,
+  onToggleFiles,
+  isTerminalOpen = false,
 }) => {
   const [inputText, setInputText] = useState('');
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
@@ -61,7 +70,21 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
       {/* Scrollable messages area */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-3xl mx-auto space-y-6">
-          {messages.map((m, idx) => {
+          {/* Interactive Workspace Identity & Metadata Hero Card */}
+          <WorkspaceCard
+            session={session}
+            onToggleTerminal={onToggleTerminal}
+            onToggleFiles={onToggleFiles}
+            isTerminalOpen={isTerminalOpen}
+          />
+
+          {messages.filter((m, idx) => {
+            // Keep chat stream clean by not duplicating info already presented in WorkspaceCard
+            if (idx === 0 && m.role === 'assistant' && m.content.toLowerCase().includes('identified')) {
+              return false;
+            }
+            return true;
+          }).map((m, idx) => {
             const isUser = m.role === 'user';
 
             return (
