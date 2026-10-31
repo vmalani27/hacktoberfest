@@ -137,15 +137,19 @@ def sanitize_compose_guardrails(content: str) -> Tuple[str, List[str]]:
     lines = content.splitlines()
     cleaned_lines = []
     violations = []
-    skip_mode = False
-    
-    # Matches host volume binds like: - .:/app or - .:/usr/src/app or - /host/path:/container
-    host_bind_regex = re.compile(r"^\s*-\s*(\.{1,2}[\\/]|/)(?!var/run/docker\.sock).*?:")
 
     for line in lines:
-        if host_bind_regex.search(line):
-            violations.append(line.strip())
-            continue  # Strip dangerous host mount
+        stripped = line.strip()
+        if stripped.startswith("-") and ":" in stripped:
+            entry = stripped.lstrip("- ").strip()
+            src = entry.split(":", 1)[0].strip()
+            # Match host relative paths: ., .., ./, ../, $PWD, ~, or absolute host roots
+            if src in (".", "..") or src.startswith(("./", ".\\", "../", "..\\", "$PWD", "${PWD}", "~")):
+                violations.append(stripped)
+                continue
+            if src.startswith("/") and not src.startswith("/var/run/docker.sock"):
+                violations.append(stripped)
+                continue
         cleaned_lines.append(line)
 
     return "\n".join(cleaned_lines), violations
