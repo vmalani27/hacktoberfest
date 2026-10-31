@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bot, User, ArrowUp, Sparkles, Copy, Check } from 'lucide-react';
 import { ChatMessage, ToolCall, SessionState } from '../types';
-import { WorkspaceCard } from './WorkspaceCard';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
 
@@ -70,14 +69,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
       {/* Scrollable messages area */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-3xl mx-auto space-y-6">
-          {/* Interactive Workspace Identity & Metadata Hero Card */}
-          <WorkspaceCard
-            session={session}
-            onToggleTerminal={onToggleTerminal}
-            onToggleFiles={onToggleFiles}
-            isTerminalOpen={isTerminalOpen}
-          />
-
           {messages.filter((m, idx) => {
             // Keep chat stream clean by not duplicating info already presented in WorkspaceCard
             if (idx === 0 && m.role === 'assistant' && m.content.toLowerCase().includes('identified')) {

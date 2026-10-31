@@ -256,11 +256,14 @@ export const App: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30 overflow-hidden">
       
-      {/* Persistent Global Studio Header */}
+      {/* Persistent Global Studio Header with Per-Repo Metadata */}
       <Header
         viewMode={viewMode}
         repoName={repoBasename}
+        repoUrl={session?.repo_url}
         detectedStack={session?.detected_stack || detectedStack}
+        appPort={session?.app_port}
+        quarantinedCount={session?.quarantined_secrets?.length || 0}
         filesCount={fileCount}
         openPorts={openPorts}
         showTerminal={showTerminal}
