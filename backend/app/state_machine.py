@@ -18,7 +18,8 @@ from app.models.schemas import (
 from app.guardrails import (
     is_app_code_error,
     scan_and_quarantine_secrets,
-    validate_git_url
+    validate_git_url,
+    sanitize_compose_guardrails
 )
 from app.tools import execute_readonly_tool, execute_approved_tool, TOOL_DEFINITIONS
 from app.llm_client import llm_client
@@ -44,9 +45,11 @@ STAGE_PROMPTS = {
         "Do NOT write file contents in chat prose; always use the `write_file` tool."
     ),
     StageEnum.EXECUTE: (
-        "You are creating containerization artifacts for this application. "
-        "MANDATORY: You MUST call the `write_file` tool call to create `Dockerfile`, `docker-compose.yml`, or `.env.example`. "
-        "Never print raw file contents in chat. "
+        "You are creating containerization artifacts for this application.\n"
+        "MANDATORY SECURITY GUARDRAILS:\n"
+        "1. ZERO HOST MOUNTS: In `docker-compose.yml`, NEVER mount host application directories (e.g. NEVER write `volumes: - .:/app` or `.:/usr/src/app`). All application code must be self-contained inside the image via Dockerfile `COPY . .`. Do NOT include host binds.\n"
+        "2. ZERO CHAT DELAYS: Never output 'I will write this file' in chat prose. Directly invoke the `write_file` tool call in the same turn.\n"
+        "3. ZERO SECRETS: Never ask for or write real passwords or tokens. Always use `.env.example` with placeholder values.\n"
         "To test or build containers inside the sandbox, you MUST call the `run_command` tool."
     ),
     StageEnum.VERIFY: (
@@ -370,6 +373,9 @@ class SessionManager:
                 })
                 continue
             elif tool_name in ["write_file", "run_command", "ask_user"]:
+                if tool_name == "write_file" and ("compose" in args.get("file_path", "").lower() or "docker-compose" in str(args.get("content", "")).lower()):
+                    sanitized_content, stripped = sanitize_compose_guardrails(args.get("content", ""))
+                    args["content"] = sanitized_content
                 tc = ToolCall(
                     id=tool_id,
                     tool_name=tool_name,
@@ -430,10 +436,13 @@ class SessionManager:
                 role="assistant",
                 content=f"✅ Created `{fname}`! Stored securely in your workspace sandbox."
             ))
-            session.messages.append(ChatMessage(
-                role="user",
-                content=f"Applied `{fname}` successfully. Continue to the next file (e.g. docker-compose.yml, .env.example) or verification."
-            ))
+            if "dockerfile" in fname.lower():
+                next_prompt = "Applied `Dockerfile` successfully. Now IMMEDIATELY generate `docker-compose.yml` by invoking the `write_file` tool call (Remember: ZERO host mounts; no volumes: - .:/app)."
+            elif "compose" in fname.lower():
+                next_prompt = "Applied `docker-compose.yml` successfully. Now IMMEDIATELY generate `.env.example` if variables are needed, or propose building and verifying using `run_command` (e.g. `docker compose build && docker compose up -d`)."
+            else:
+                next_prompt = f"Applied `{fname}` successfully. Propose container verification using `run_command`."
+            session.messages.append(ChatMessage(role="user", content=next_prompt))
             session.stage = StageEnum.EXECUTE
         elif tc.tool_name == "run_command":
             if result.get("success"):

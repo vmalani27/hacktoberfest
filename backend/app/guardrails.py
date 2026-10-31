@@ -127,6 +127,29 @@ def validate_git_url(url: str) -> Tuple[bool, str, Optional[str]]:
     repo_name = path.split("/")[-1]
     return True, "", repo_name
 
+def sanitize_compose_guardrails(content: str) -> Tuple[str, List[str]]:
+    """
+    Enforces the Zero Host Mounts security guardrail.
+    Strips relative host binds like '.:/app' or './:/usr/src/app' from docker-compose.yml
+    because production container artifacts must be self-contained (packaged via Dockerfile COPY).
+    Returns (cleaned_content, list_of_violations_fixed).
+    """
+    lines = content.splitlines()
+    cleaned_lines = []
+    violations = []
+    skip_mode = False
+    
+    # Matches host volume binds like: - .:/app or - .:/usr/src/app or - /host/path:/container
+    host_bind_regex = re.compile(r"^\s*-\s*(\.{1,2}[\\/]|/)(?!var/run/docker\.sock).*?:")
+
+    for line in lines:
+        if host_bind_regex.search(line):
+            violations.append(line.strip())
+            continue  # Strip dangerous host mount
+        cleaned_lines.append(line)
+
+    return "\n".join(cleaned_lines), violations
+
 def is_command_safe(command: str) -> Tuple[bool, str]:
     """Check command against blocked destructive and exfiltration patterns."""
     for pattern in BLOCKED_COMMAND_PATTERNS:
