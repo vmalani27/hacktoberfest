@@ -1,0 +1,55 @@
+services:
+  sandbox:
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile
+    container_name: deploy-assistant-sandbox
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=""
+    volumes:
+      - ./workspace:/workspace
+      - dind_storage:/var/lib/docker
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: deploy-assistant-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-bedrock}
+      - AWS_REGION=${AWS_REGION:-ap-south-1}
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-apac.amazon.nova-pro-v1:0}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-}
+      - SANDBOX_CONTAINER_NAME=deploy-assistant-sandbox
+      - WORKSPACE_DIR=/workspace
+      - COMMAND_TIMEOUT_SECONDS=120
+      - MAX_STEP_LIMIT=25
+      - MAX_RETRY_LIMIT=3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspace:/workspace
+      - ./backend/app:/app/app
+      - ~/.aws:/root/.aws
+    depends_on:
+      - sandbox
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: deploy-assistant-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  dind_storage:
