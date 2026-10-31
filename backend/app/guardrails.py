@@ -19,6 +19,30 @@ BLOCKED_COMMAND_PATTERNS = [
 ]
 
 # Patterns for files that typically hold secrets, API keys, or credentials
+PROMPT_INJECTION_PATTERNS = [
+    r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules)",
+    r"disregard\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules)",
+    r"forget\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules)",
+    r"you\s+are\s+now\s+(an?|a)\s+",
+    r"act\s+as\s+(an?|a)\s+",
+    r"system\s+(override|prompt|reset)",
+    r"jailbreak",
+    r"\bDAN\s+mode\b",
+    r"repeat\s+(everything|the\s+text)\s+above",
+    r"what\s+is\s+your\s+system\s+prompt",
+]
+
+def check_prompt_injection(user_input: str) -> Tuple[bool, str]:
+    """
+    Detects attempts to hijack, jailbreak, or distract the deployment assistant.
+    Returns (is_injection, reason).
+    """
+    cleaned = (user_input or "").strip()
+    for pattern in PROMPT_INJECTION_PATTERNS:
+        if re.search(pattern, cleaned, re.IGNORECASE):
+            return True, f"Blocked prompt injection pattern: {pattern}"
+    return False, ""
+
 SECRET_FILE_REGEXES = [
     r"^\.env(\..+)?$",
     r".*\.(pem|key|pkcs12|pfx|p12|keystore)$",

@@ -290,6 +290,22 @@ class SessionManager:
             messages=[
                 ChatMessage(role="assistant", content=initial_content)
             ],
+            current_tool_call=ToolCall(
+                id="q_database",
+                tool_name="ask_user",
+                arguments={
+                    "question_id": "db_type",
+                    "question": "Does this application require a companion database, or is it completely stateless?",
+                    "options": [
+                        "Stateless (No Database)",
+                        "PostgreSQL",
+                        "MongoDB",
+                        "Redis"
+                    ]
+                },
+                status=ToolCallStatus.PENDING_APPROVAL,
+                requires_approval=True
+            ),
             last_activity=time.time()
         )
 

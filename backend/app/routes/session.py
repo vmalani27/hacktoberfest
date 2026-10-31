@@ -15,7 +15,7 @@ from app.models.schemas import (
     SetupStatusResponse
 )
 from app.state_machine import session_manager
-from app.guardrails import validate_git_url
+from app.guardrails import validate_git_url, check_prompt_injection
 
 router = APIRouter(prefix="/api/session", tags=["Session"])
 
@@ -75,6 +75,17 @@ async def send_user_message(session_id: str, req: UserMessageRequest):
     session = session_manager.sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Security Guardrail: Block prompt injection / jailbreak attempts
+    is_inj, reason = check_prompt_injection(req.message)
+    if is_inj:
+        session.messages.append(ChatMessage(role="user", content=req.message))
+        session.messages.append(ChatMessage(
+            role="assistant",
+            content="🛡️ **Security Guardrail Active**: Instruction override / prompt injection attempt blocked. I am strictly constrained to containerizing and deploying this repository. Please guide the container configuration or approve pending cards."
+        ))
+        return session
+
     session.messages.append(ChatMessage(role="user", content=req.message))
     if session.stage == StageEnum.INTERVIEW:
         session.stage = StageEnum.EXECUTE
@@ -109,8 +120,7 @@ async def submit_answer(session_id: str, ans: InterviewAnswer):
     session.messages.append(ChatMessage(role="user", content=f"User selection for {ans.question_id}: {ans.answer}"))
     if session.current_tool_call and session.current_tool_call.tool_name == "ask_user":
         session.current_tool_call = None
-    if len(session.answers) >= 1 and session.stage == StageEnum.INTERVIEW:
-        session.stage = StageEnum.PLAN
+    session.stage = StageEnum.EXECUTE
     return await session_manager.step(session_id)
 
 @router.get("/{session_id}/export")
