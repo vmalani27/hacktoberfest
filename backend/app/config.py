@@ -19,9 +19,9 @@ class Settings(BaseSettings):
     BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-pro-v1:0")
 
     # OpenAI-Compatible Configuration (Google AI Studio, OpenAI, etc.)
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-    OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gemini-flash-latest")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", os.getenv("GROQ_API_KEY", os.getenv("GEMINI_API_KEY", "")))
+    OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://api.groq.com/openai/v1")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "qwen-2.5-coder-32b")
 
     # Sandbox / Execution
     DOCKER_HOST_URL: str = os.getenv("DOCKER_HOST", "")
