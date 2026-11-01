@@ -338,8 +338,10 @@ class SessionManager:
         session.step_count += 1
         prompt = STAGE_PROMPTS.get(session.stage, "")
 
+        # Keep sliding window of recent messages to preserve Groq free-tier TPM quota
+        recent_messages = session.messages[-6:] if len(session.messages) > 6 else session.messages
         history = []
-        for m in session.messages:
+        for m in recent_messages:
             if m.role in ["user", "assistant"]:
                 history.append({"role": m.role, "content": m.content})
         if extra_instruction:
@@ -383,7 +385,7 @@ class SessionManager:
                 # Feed inspection result back into conversation history so the model can proceed to write_file
                 history.append({
                     "role": "user",
-                    "content": f"[Result of {tool_name}]:\n{result_str[:4000]}"
+                    "content": f"[Result of {tool_name}]:\n{result_str[:1200]}"
                 })
                 continue
             elif tool_name in ["write_file", "run_command", "ask_user"]:

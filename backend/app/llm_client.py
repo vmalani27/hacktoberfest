@@ -168,8 +168,20 @@ class OpenAICompatibleClient:
                             }
                         return {"role": "assistant", "content": "", "tool_calls": []}
                     elif res.status_code == 429 and attempt < max_retries - 1:
-                        # Auto-retry on Groq rate limits (tokens per minute reset in 3-5 seconds)
-                        await asyncio.sleep(4.5 + (attempt * 2.0))
+                        wait_sec = 6.0
+                        retry_header = res.headers.get("retry-after")
+                        if retry_header:
+                            try:
+                                wait_sec = float(retry_header) + 1.0
+                            except Exception:
+                                pass
+                        else:
+                            match = re.search(r"try again in (\d+(?:\.\d+)?)s", res.text)
+                            if match:
+                                wait_sec = float(match.group(1)) + 1.5
+                            else:
+                                wait_sec = 8.0 + (attempt * 4.0)
+                        await asyncio.sleep(wait_sec)
                         continue
                     else:
                         return {
