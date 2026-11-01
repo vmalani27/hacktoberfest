@@ -1,0 +1,42 @@
+{
+  "name": "devops-only-guardrail",
+  "description": "Centralized guardrail restricting all interactions exclusively to DevOps and cloud deployment",
+  "topicPolicyConfig": {
+    "topicsConfig": [
+      {
+        "name": "NonDevOpsTopics",
+        "definition": "Any user query, conversational request, or task that is not directly related to software deployment, containerization (Docker, Podman, Kubernetes), cloud infrastructure (AWS, Linux systems), CI/CD pipelines, application runtime configuration, networking, or build debugging. This includes all general knowledge, trivia, creative writing, math, science, personal chat, philosophy, or unrelated code tasks.",
+        "examples": [
+          "What is the capital of France?",
+          "Can you write a poem about the ocean?",
+          "Who was the first president of the United States?",
+          "Help me solve this calculus problem",
+          "What is the best recipe for chocolate cake?",
+          "How do I invest in the stock market?",
+          "Write a python script to play tic-tac-toe"
+        ],
+        "type": "DENY",
+        "inputAction": "BLOCK",
+        "outputAction": "BLOCK"
+      }
+    ]
+  },
+  "contentPolicyConfig": {
+    "filtersConfig": [
+      {
+        "type": "PROMPT_ATTACK",
+        "inputStrength": "HIGH",
+        "outputStrength": "NONE"
+      }
+    ]
+  },
+  "sensitiveInformationPolicyConfig": {
+    "piiEntitiesConfig": [
+      { "type": "AWS_ACCESS_KEY", "action": "BLOCK" },
+      { "type": "AWS_SECRET_KEY", "action": "BLOCK" },
+      { "type": "PASSWORD", "action": "BLOCK" }
+    ]
+  },
+  "blockedInputMessaging": "I am a dedicated DevOps assistant. I only handle containerization, cloud infrastructure, and deployment tasks. Please ask a DevOps or deployment-related question.",
+  "blockedOutputsMessaging": "The generated response was blocked because it falls outside the DevOps operational boundary."
+}

@@ -1,104 +1,192 @@
 # LabOps Deploy Assistant 🚀
 
-An interactive, trustworthy deployment assistant powered by open-weight models that containerizes repositories, executes builds in isolated sandboxes, and verifies application endpoints — with human-in-the-loop approval on every action.
+An interactive, security-first containerization and deployment assistant powered by Amazon Bedrock. It autonomously scans repositories, analyzes project topology (including full-stack monorepos), synthesizes hardened Dockerfiles and Docker Compose configurations, and validates them inside an isolated sandbox—with human-in-the-loop approval on every action.
 
-A **Git link as a hard gate** keeps the user's computer completely out of the picture, separating our product from tools that run on the host with dangerous access to local files and environment variables.
+A **Git link as a hard gate** keeps the user's host environment, local files, and private credentials completely out of the picture.
 
 ---
 
-## 🧭 The 4-Step Product Flow
+## 🧭 The Core Architecture: Deterministic Pipeline, Generative Tasks
+
+> **Core Operating Principle:**  
+> Never ask an LLM to manage your application's state machine, and never ask deterministic code to synthesize custom runtime configurations.
 
 ```mermaid
-flowchart LR
-    A["1. Start Screen<br/>(Git Link Gate & Trust Card)"] --> B["2. Workspace Setup<br/>(Shallow Clone & Quarantine)"]
-    B --> C["3. Hand-Off to Chat<br/>(Interview & Approved Execution)"]
-    C --> D["4. Closing<br/>(Download Bundle & Permanent Teardown)"]
+flowchart TD
+    subgraph DeterministicEngine ["⚙️ Deterministic Workflow Engine (FastAPI)"]
+        Clone["1. Shallow Clone (--depth 1)"] --> Scan["2. Recursive Tree Scanner (2 levels deep)"]
+        Scan --> Gather["3. Gather Manifests (package.json, requirements.txt, etc.)"]
+    end
+
+    subgraph LLMTasks ["🧠 Generative Tasks (Amazon Bedrock with Centralized Guardrails)"]
+        Gather -->|Discovered manifests & tree| Task1["Task 1: Topology & Service Analyzer"]
+        Task1 -->|JSON Service Map| EngineRouter["Engine: UI Service Map & Interview"]
+        EngineRouter -->|Target Service Context| Task2["Task 2: Dockerfile & Compose Synthesizer"]
+        Task2 -->|Valid Artifacts| Sandbox["Sandbox: docker build in container"]
+        Sandbox -->|On Error: Pass stderr| Task3["Task 3: Build Error Diagnostician"]
+    end
 ```
 
-### 1. Start Screen (The Hard Gate)
-- **One field**: *"Paste a link to a Git repository"*.
-- **Validation**: Enforces `https://` only, recognizable repository format, rejects personal access tokens / credentials.
-- **Badge**: *"Public repositories only for now"*.
-- **Reassurance**: *"It can download things, but it can't reach your computer or your accounts."*
-- **Trust Card Copy**:
-  > **A private workspace, just for this.** Your project is copied into a temporary workspace, separate from your computer and your accounts.  
-  > **Gone when you're done.** When you close this session, the workspace and everything in it is deleted.  
-  > **No secrets needed.** Don't paste passwords or keys. I won't ask for them, and I skip files that usually hold them.  
-  > **One thing to know:** to understand your project, I read your files and send their text to an AI model.
-
-### 2. Setting Up Your Workspace (Live Setup Screen)
-Runs while the shallow clone and inspection execute, presenting live status lines with a one-sentence reassurance:
-- *"Opening a fresh workspace…"* (Preparing an isolated, ephemeral sandbox)
-- *"Downloading your project from GitHub…"* (Shallow clone with `--depth 1` and timeout)
-- *"Setting aside files that might hold secrets…"* (Scans and quarantines `.env`, `.pem`, key files so the AI never sees them)
-- *"Taking a look at what's inside…"* (Manifest and architecture inspection)
-- *"Ready. This looks like a Node app."* (or Python FastAPI app)
-
-### 3. Hand-Off to Chat
-- Assistant opens immediately with what it found: *"This looks like a Node app with an Express server and package.json dependencies."*
-- Initiates the brief interview: companion databases (Postgres, MongoDB, Redis, None), ports, environment variables.
-- Proposes configuration files (`Dockerfile`, `docker-compose.yml`, `.env.example`) and build commands (`run_command`), pausing for explicit developer approval.
-
-### 4. Closing & Permanent Deletion
-- Before workspace deletion, offers **"Download your files"** (a complete ZIP bundle containing `Dockerfile`, `docker-compose.yml`, `.env.example`, and `DEPLOY_RUNBOOK.md`).
-- Confirms workspace deletion: displays verifiable confirmation that the container and workspace files have been permanently destroyed.
+The orchestrator backend deterministically manages the session lifecycle. The LLM is called as an isolated functional task for three specific responsibilities:
+1. **Analyze project topology** (monorepo vs single service, ports, entrypoints).
+2. **Synthesize container configurations** (`Dockerfile`, `docker-compose.yml`, `.env.example`).
+3. **Diagnose build failures** (reading sandbox `stderr` and proposing corrections).
 
 ---
 
-## 🔒 Security Promises & Architecture
+## 🛡️ Centralized AWS Bedrock Guardrails (DevOps Domain Boundary)
 
-| Product Promise | How We Enforce It |
-|---|---|
-| **Separate from your computer** | Runs in disposable isolated workspaces. Mounts nothing from the host machine. Strips all host environment variables. |
-| **No secrets needed** | Tool executor strictly refuses to read `.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa`, credentials. Creates `.env.example` with placeholder values instead. |
-| **Gone when you're done** | Explicit session deletion endpoint and 60-minute idle auto-cleanup purge containers and files completely. |
-| **Public repositories only** | Rejects tokens or SSH authentication URLs upfront to prevent credential leakage. |
-| **Shallow & constrained clone** | Clones with `--depth 1`, 50-second timeout, and 100MB repository limit. |
-| **The Stop Rule** | If a build fails due to a bug in the user's app code (SyntaxError, missing import), quotes the error verbatim and halts instead of guessing fixes. |
+Rather than maintaining brittle in-code regex lists for prompt injections and off-topic conversations, security is codified natively into AWS infrastructure using **Amazon Bedrock Guardrails**.
+
+### 1. Guardrail Definition (`devops-guardrail.json`)
+
+Enforces a strict **DevOps-only domain boundary** and blocks prompt injections, jailbreaks, and credential leaks at the network edge:
+
+```json
+{
+  "name": "devops-only-guardrail",
+  "description": "Centralized guardrail restricting all interactions exclusively to DevOps and cloud deployment",
+  "topicPolicyConfig": {
+    "topicsConfig": [
+      {
+        "name": "NonDevOpsTopics",
+        "definition": "Any user query, conversational request, or task that is not directly related to software deployment, containerization (Docker, Podman, Kubernetes), cloud infrastructure (AWS, Linux systems), CI/CD pipelines, application runtime configuration, networking, or build debugging. This includes all general knowledge, trivia, creative writing, math, science, personal chat, philosophy, or unrelated code tasks.",
+        "examples": [
+          "What is the capital of France?",
+          "Can you write a poem about the ocean?",
+          "Who was the first president of the United States?",
+          "Help me solve this calculus problem",
+          "What is the best recipe for chocolate cake?",
+          "How do I invest in the stock market?",
+          "Write a python script to play tic-tac-toe"
+        ],
+        "type": "DENY",
+        "inputAction": "BLOCK",
+        "outputAction": "BLOCK"
+      }
+    ]
+  },
+  "contentPolicyConfig": {
+    "filtersConfig": [
+      {
+        "type": "PROMPT_ATTACK",
+        "inputStrength": "HIGH",
+        "outputStrength": "NONE"
+      }
+    ]
+  },
+  "sensitiveInformationPolicyConfig": {
+    "piiEntitiesConfig": [
+      { "type": "AWS_ACCESS_KEY", "action": "BLOCK" },
+      { "type": "AWS_SECRET_KEY", "action": "BLOCK" },
+      { "type": "PASSWORD", "action": "BLOCK" }
+    ]
+  },
+  "blockedInputMessaging": "I am a dedicated DevOps assistant. I only handle containerization, cloud infrastructure, and deployment tasks. Please ask a DevOps or deployment-related question.",
+  "blockedOutputsMessaging": "The generated response was blocked because it falls outside the DevOps operational boundary."
+}
+```
+
+### 2. Deploying via AWS CLI
+
+```bash
+# 1. Create the guardrail in your target AWS region
+aws bedrock create-guardrail \
+  --cli-input-json file://devops-guardrail.json \
+  --region ap-south-1
+
+# 2. Publish Version 1
+aws bedrock create-guardrail-version \
+  --guardrail-identifier <YOUR-GUARDRAIL-ID> \
+  --region ap-south-1
+```
+
+### 3. Testing with `apply-guardrail` CLI (Zero LLM Token Cost)
+
+Verify prompt blocking directly from the terminal without invoking the generative model:
+
+```bash
+# Test an off-topic query (blocked immediately)
+aws bedrock-runtime apply-guardrail \
+  --guardrail-identifier <YOUR-GUARDRAIL-ID> \
+  --guardrail-version 1 \
+  --source INPUT \
+  --content '[{"text": {"text": "What is the capital of France?"}}]' \
+  --region ap-south-1
+```
+
+---
+
+## 🔒 Cloud & Infrastructure Security Guardrails
+
+| Security Concern | Vulnerability Identified | Production Architecture |
+|---|---|---|
+| **Credential Theft via IMDS** | In Docker bridge, `hop-limit = 2` exposed EC2 IAM credentials to untrusted container code. | Enforce **IMDSv2 with Hop Limit = 1** (`aws ec2 modify-instance-metadata-options --http-put-response-hop-limit 1`). Packets from containers expire before reaching the link-local address. |
+| **Container Breakout** | Running `privileged: true` DinD grants root access to host kernel devices. | Use **Sysbox runtime** (rootless Docker-in-Docker) or ephemeral **Firecracker MicroVMs**. |
+| **Zero Host Mounts** | LLMs hallucinate dev bind mounts (`.:/app`), exposing host files. | Guardrails sanitize generated Docker Compose files to strip all relative or host volume binds. |
+| **Runaway Billing** | Unprotected endpoints can drain inference quotas. | Set **AWS Budgets** with email alerts at 80% and 100% of the cost limit. |
+| **Secret Quarantine** | Cloned repos might include `.env` or SSH keys. | Scans and quarantines credential files (`.env`, `*.pem`, `id_rsa`) during setup so the AI never reads them. |
+
+---
+
+## 🧭 The 4-Step User Journey
+
+### 1. Start Screen (The Hard Gate)
+- **Git Link Input**: Enforces public `https://` repositories only. Rejects personal access tokens, passwords, or SSH keys upfront.
+- **Trust Reassurance**: *"Your project is cloned into an isolated, disposable sandbox separate from your machine and accounts. Gone when you're done."*
+
+### 2. Workspace Setup & Deep Inspection
+- Runs shallow clone (`--depth 1`, 50-second timeout).
+- Quarantines secret-bearing files.
+- **Recursive Manifest Scanner**: Inspects root and subdirectories (`frontend/`, `backend/`, `services/`) to detect monorepos rather than blindly checking root files.
+
+### 3. Interactive Studio & Human-in-the-Loop Approval
+- **Per-Repo Header**: Displays repo name, GitHub link, stack indicator, target port, and quarantined secret count.
+- **Focused Interview**: Clarifies companion databases (`Stateless`, `PostgreSQL`, `MongoDB`, `Redis`).
+- **Visual Approval Cards**: Proposes `Dockerfile` and `docker-compose.yml` with visual diff previews before applying.
+- **Live Terminal Execution**: Streams container build and healthcheck outputs directly into the embedded xterm window.
+
+### 4. Verification, Export & Permanent Teardown
+- **Stop Rule on Code Errors**: If the application fails due to internal syntax errors (e.g. `SyntaxError`, missing import), the assistant halts and quotes the error rather than hallucinating fixes.
+- **Verified Bundle Export**: Downloads a complete ZIP bundle containing `Dockerfile`, `docker-compose.yml`, `.env.example`, and `DEPLOY_RUNBOOK.md`.
+- **Permanent Destruction**: Deletes all sandbox containers, volumes, and temporary workspace files.
 
 ---
 
 ## ⚡ Quick Start
 
-### Option 1: Docker Compose (All-in-One)
+### 1. Running with Docker Compose
 
 ```bash
 cd "hacktober fest"
 docker compose up --build
 ```
-- **Frontend Dashboard**: [http://localhost:3000](http://localhost:3000)
+
+- **Frontend Studio UI**: [http://localhost:3000](http://localhost:3000)
 - **Backend API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Interactive Sandbox Terminal**: Built-in side-by-side terminal connected to DinD container.
+- **Sandbox Terminal**: Connected via WebSockets to the isolated container daemon.
 
----
+### 2. Environment Configuration (`.env`)
 
-### Option 2: Local Development
+```env
+# Choose provider: "bedrock" or "openai"
+LLM_PROVIDER=bedrock
 
-#### 1. Backend (FastAPI)
-```bash
-cd "hacktober fest/backend"
-python -m venv venv
-# Windows:
-venv\Scripts\activate
-# Linux/macOS:
-source venv/bin/activate
+# Amazon Bedrock Settings
+AWS_REGION=ap-south-1
+BEDROCK_MODEL_ID=google.gemma-3-4b-it
 
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-
-#### 2. Frontend (React + Vite + Tailwind)
-```bash
-cd "hacktober fest/frontend"
-npm install
-npm run dev
+# OpenAI-Compatible Fallback (Groq, Google AI Studio, DeepSeek)
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+OPENAI_MODEL=qwen/qwen3.8-27b
+OPENAI_API_KEY=your_key_here
 ```
 
 ---
 
 ## 🧪 Built-in Test Fixtures
 
-Test fixtures under `backend/fixtures/` allow instant one-click validation directly from the Start Screen:
+Test fixtures under `backend/fixtures/` allow instant validation directly from the Start Screen:
 1. `sample-node-app`: Working Express.js REST service.
-2. `sample-python-app`: Working FastAPI microservice with database configuration.
-3. `broken-app`: A project containing a deliberate syntax error to test the **Stop Rule** (detects application code failure vs. deployment configuration).
+2. `sample-python-app`: Working FastAPI microservice with companion database configuration.
+3. `broken-app`: Deliberate syntax bug verifying the **Stop Rule** (detects code failure vs. deployment configuration).
