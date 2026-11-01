@@ -28,22 +28,22 @@ from app.tools import execute_readonly_tool, execute_approved_tool, TOOL_DEFINIT
 from app.llm_client import llm_client
 from app.docker_bridge import docker_bridge
 from app.config import settings
-from app.reconnaissance import reconnaissance_engine, ArchitectureProfile
 
 STAGE_PROMPTS = {
     StageEnum.INSPECT: (
         "You are an expert autonomous DevOps & Cloud Infrastructure Architect.\n"
         "A codebase has been loaded into your ephemeral workspace sandbox.\n"
-        "DevOps is NOT just containerization; it is end-to-end deployment engineering (Target Cloud/Platform, CI/CD, IaC, and Container Packaging).\n\n"
-        "STEP 1: CODEBASE RECONNAISSANCE\n"
-        "- Call `list_dir` to inspect the project layout.\n"
-        "- Inspect subdirectories (`backend`, `frontend`, `services`, `api`) and manifests (`package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml`, `Gemfile`, `go.mod`, etc.) with `read_file`.\n"
-        "- Read server entrypoints (server.js, main.py, etc.) to discover ports and routes.\n"
-        "- Call `declare_stack_profile` to record your findings.\n\n"
-        "STEP 2: DEVOPS INFRASTRUCTURE INTERVIEW\n"
-        "- DO NOT jump straight to writing a generic Dockerfile. First consult the developer by calling `ask_user`.\n"
-        "- Inquire about their target deployment destination (e.g. Cloud IaaS AWS/GCP, PaaS Render/Railway, Self-Managed VPS, or Local Staging Sandbox).\n"
-        "- If it is a monorepo or multi-service stack, inquire how they wish to package and connect the services."
+        "Your task is to thoroughly understand the architecture, runtime requirements, credentials/environment variables, and platform feasibility of the project.\n\n"
+        "AUTONOMOUS CODEBASE INSPECTION PROTOCOL:\n"
+        "1. EXPLORE: Call `list_dir` to inspect the project layout.\n"
+        "2. READ: Call `read_file` on manifests (package.json, requirements.txt, pyproject.toml, Cargo.toml, go.mod, etc.), configuration files (docker-compose.yml, helm charts, .env.example, etc.), and server entrypoints (server.js, main.py, app.py, etc.).\n"
+        "   - Read the actual code to discover the architecture, background workers, databases, and third-party APIs (e.g. Firebase Admin requiring serviceAccount JSON/env, AWS Bedrock, Stripe, Redis, Postgres).\n"
+        "   - Check for low-level host requirements (e.g. /var/run/docker.sock, Docker-in-Docker, GPU/CUDA, custom host daemons).\n"
+        "3. PROFILE: Call `declare_stack_profile` to record your findings (framework, primary port, architecture archetype, and detected dependencies).\n"
+        "4. CONSULT: Call `ask_user` with your synthesized analysis:\n"
+        "   - Summarize your findings, detected components, ports, and required environment variables/credentials.\n"
+        "   - Assess platform feasibility: if the project requires low-level host access (such as Docker daemon sockets or privileged execution), explain clearly why standard PaaS (Render, Vercel, Railway) is incompatible and recommend viable cloud targets (e.g. AWS EC2 with Docker & Terraform, Self-Managed VPS, or ECS on EC2).\n"
+        "   - Offer tailored deployment choices in `options`."
     ),
     StageEnum.INTERVIEW: (
         "You are an expert DevOps Architect consulting on cloud deployment strategy.\n"
@@ -98,16 +98,6 @@ class SessionManager:
         self.setup_statuses: Dict[str, SetupStatusResponse] = {}
         self.workspace_root = settings.WORKSPACE_DIR
         os.makedirs(self.workspace_root, exist_ok=True)
-
-    def _detect_stack(self, repo_path: str) -> Tuple[str, Optional[int]]:
-        """
-        Deep recursive codebase reconnaissance and platform feasibility analysis.
-        """
-        if not os.path.exists(repo_path):
-            return "Generic Application", 8000
-        profile = reconnaissance_engine.analyze_repository(repo_path)
-        port = profile.components[0].ports[0] if (profile.components and profile.components[0].ports) else 8000
-        return profile.headline, port
 
     async def initialize_workspace(
         self,
@@ -206,89 +196,46 @@ class SessionManager:
         else:
             steps[2].detail = "No secret files detected. Privacy boundary verified."
 
-        # Step 4: Codebase Reconnaissance & Stack Discovery
-        steps[3].label = "Analyzing codebase architecture…"
+        # Step 4: Autonomous Codebase Reconnaissance
+        steps[3].label = "Autonomous AI Codebase Reconnaissance…"
         steps[3].status = "running"
-        steps[3].detail = "Scanning runtime topology, host socket requirements, platform feasibility, and services."
-
-        profile = reconnaissance_engine.analyze_repository(target_dir)
-        detected_stack = profile.headline
-        detected_port = profile.components[0].ports[0] if (profile.components and profile.components[0].ports) else 8000
-
-        steps[3].status = "completed"
-        steps[3].detail = f"Identified {detected_stack} (primary port {detected_port})."
-        status_resp.detected_stack = detected_stack
-
-        # Step 5: Ready Hand-off
-        steps[4].label = f"Ready. {detected_stack}."
-        steps[4].status = "completed"
-        steps[4].detail = "Ephemeral sandbox ready. Commencing DevOps infrastructure consultation."
-        status_resp.completed = True
-
-        summary_msg = (
-            f"I have inspected **{repo_name}** and mapped its codebase architecture:\n\n"
-            f"- **Stack**: **{profile.headline}**\n"
-            f"- **Architecture**: {profile.project_summary}\n"
-        )
-        if profile.components:
-            comp_list = []
-            for c in profile.components:
-                dep_info = f" (requires: {', '.join(c.host_dependencies)})" if c.host_dependencies else ""
-                port_str = f"port `{c.ports[0]}`" if c.ports else "internal utility"
-                comp_list.append(f"  - **{c.name}** (`{c.path}`): {c.runtime} on {port_str}{dep_info}")
-            summary_msg += "\n**Discovered Services & Components:**\n" + "\n".join(comp_list) + "\n"
-
-        if not profile.paas_compatible:
-            summary_msg += (
-                f"\n**Critical Host Requirements Identified**:\n"
-                + "\n".join([f"- {b}" for b in profile.paas_blockers])
-                + "\n\n**Platform Feasibility Warning**: Standard PaaS providers (Render, Vercel, Railway Standard) **cannot** run this application because they disallow host Docker daemon access (`/var/run/docker.sock`) and privileged execution (`--privileged`). Deploying to PaaS will crash at runtime."
-            )
-        else:
-            summary_msg += "\n**Platform Feasibility**: Compatible with standard PaaS (Render / Railway / Vercel), Cloud IaaS, or Self-Managed VPS."
-
-        summary_msg += "\n\nI have provisioned an isolated container sandbox for testing your build."
-
-        question_text = profile.consultation_question
-        options = profile.consultation_options
-
-        facts = [
-            LedgerEntry(category="declared", fact=f"Framework stack: {profile.headline}", evidence=os.path.basename(target_dir)),
-            LedgerEntry(category="declared", fact=f"Configured service port: {detected_port}", evidence="manifest analysis"),
-            LedgerEntry(category="verified", fact=f"Quarantine scan: {len(quarantined)} secret file(s) isolated", evidence="safety scanner"),
-        ]
-        if profile.paas_blockers:
-            for blocker in profile.paas_blockers:
-                facts.append(LedgerEntry(category="verified", fact=f"Host constraint: {blocker}", evidence="reconnaissance scan"))
-        if not profile.paas_compatible:
-            facts.append(LedgerEntry(category="verified", fact="PaaS feasibility: INCOMPATIBLE (Host Docker socket or privileged mode required)", evidence="reconnaissance scan"))
+        steps[3].detail = "AI agent is inspecting repository layout, reading manifests, and mapping architecture."
 
         session = SessionState(
             session_id=session_id,
-            stage=StageEnum.INTERVIEW,
+            stage=StageEnum.INSPECT,
             repo_path=target_dir,
             repo_url=repo_url,
-            detected_stack=detected_stack,
+            detected_stack="Inspecting…",
             quarantined_secrets=quarantined,
-            app_type=detected_stack,
-            app_port=detected_port,
-            facts_ledger=facts,
-            messages=[
-                ChatMessage(role="assistant", content=summary_msg)
+            app_type="Inspecting…",
+            app_port=8000,
+            facts_ledger=[
+                LedgerEntry(category="verified", fact=f"Quarantine scan: {len(quarantined)} secret file(s) isolated", evidence="safety scanner")
             ],
-            current_tool_call=ToolCall(
-                id=f"deploy_target_{str(uuid.uuid4())[:8]}",
-                tool_name="ask_user",
-                arguments={
-                    "question_id": "deployment_target",
-                    "question": question_text,
-                    "options": options
-                },
-                status=ToolCallStatus.PENDING_APPROVAL,
-                requires_approval=True
-            ),
+            messages=[],
             last_activity=time.time()
         )
+        self.sessions[session_id] = session
+
+        # Execute autonomous AI inspection loop
+        inspection_instruction = (
+            f"Please inspect the newly loaded repository '{repo_name}' to discover its architecture, "
+            f"dependencies, credentials, and deployment requirements."
+        )
+        await self.step(session_id, extra_instruction=inspection_instruction)
+
+        # Step 5: Ready Hand-off
+        steps[3].status = "completed"
+        steps[3].detail = f"AI identified {session.detected_stack} (port {session.app_port})."
+        status_resp.detected_stack = session.detected_stack
+
+        steps[4].label = f"Ready. {session.detected_stack}"
+        steps[4].status = "completed"
+        steps[4].detail = "AI completed codebase inspection. DevOps infrastructure consultation active."
+        status_resp.completed = True
+
+        return session
         self.sessions[session_id] = session
         return session
 
@@ -332,11 +279,13 @@ class SessionManager:
             history.append({"role": "user", "content": extra_instruction})
 
         # Autonomous tool-use loop (handles readonly inspection tools like list_dir, read_file, declare_stack_profile)
-        for loop_idx in range(10):
+        for loop_idx in range(12):
+            force_tool = (session.stage == StageEnum.INSPECT and not session.current_tool_call)
             response = await llm_client.chat(
                 messages=history,
                 tools=TOOL_DEFINITIONS,
-                stage_prompt=prompt
+                stage_prompt=prompt,
+                force_tool=force_tool
             )
 
             content = response.get("content", "")
@@ -344,117 +293,111 @@ class SessionManager:
 
             if content:
                 session.messages.append(ChatMessage(role="assistant", content=content))
-                history.append({"role": "assistant", "content": content})
 
             if not tool_calls:
+                if content:
+                    history.append({"role": "assistant", "content": content})
                 break
 
-            tc_data = tool_calls[0]
-            func_data = tc_data.get("function", {})
-            tool_name = func_data.get("name", "")
-            raw_args = func_data.get("arguments", {})
-            if isinstance(raw_args, str):
-                try:
-                    args = json.loads(raw_args)
-                except Exception:
-                    args = {}
-            else:
-                args = raw_args
+            history.append({"role": "assistant", "content": content or "", "tool_calls": tool_calls})
+            has_pending_approval = False
 
-            if tool_calls:
-                history.append({"role": "assistant", "content": content, "tool_calls": tool_calls})
-                tool_id = tool_calls[0].get("id") or str(uuid.uuid4())[:8]
-            else:
-                tool_id = str(uuid.uuid4())[:8]
-
-            if tool_name in ["list_dir", "read_file"]:
-                exec_result = execute_readonly_tool(tool_name, args, session.repo_path)
-                result_str = str(exec_result.get("entries") or exec_result.get("content") or exec_result)
-                history.append({
-                    "role": "tool",
-                    "tool_call_id": tool_id,
-                    "content": result_str[:2500]
-                })
-                continue
-            elif tool_name == "declare_stack_profile":
-                fw = args.get("framework") or ""
-                arch = args.get("architecture") or "monorepo"
-                summary = args.get("summary") or ""
-                deps = args.get("detected_dependencies") or []
-
-                profile = reconnaissance_engine.analyze_repository(session.repo_path)
-                if not fw or fw.lower() in ("unknown", "generic application", "generic", "application service"):
-                    fw = profile.headline
-                    port = profile.components[0].ports[0] if (profile.components and profile.components[0].ports) else 8000
+            for tc in tool_calls:
+                func_data = tc.get("function", {})
+                tool_name = func_data.get("name", "")
+                raw_args = func_data.get("arguments", {})
+                if isinstance(raw_args, str):
+                    try:
+                        args = json.loads(raw_args)
+                    except Exception:
+                        args = {}
                 else:
-                    port = args.get("port") or (profile.components[0].ports[0] if (profile.components and profile.components[0].ports) else 8000)
+                    args = raw_args
+                tool_id = tc.get("id") or str(uuid.uuid4())[:8]
 
-                session.detected_stack = fw
-                session.app_port = port
-                session.app_type = fw
+                if tool_name in ["list_dir", "read_file"]:
+                    exec_result = execute_readonly_tool(tool_name, args, session.repo_path)
+                    result_str = str(exec_result.get("entries") or exec_result.get("content") or exec_result)
+                    history.append({
+                        "role": "tool",
+                        "tool_call_id": tool_id,
+                        "content": result_str[:2500]
+                    })
+                elif tool_name == "declare_stack_profile":
+                    fw = args.get("framework") or "Application Service"
+                    port = args.get("port") or 8000
+                    arch = args.get("architecture") or "standard"
+                    summary = args.get("summary") or ""
+                    deps = args.get("detected_dependencies") or []
 
-                session.facts_ledger.append(LedgerEntry(
-                    category="verified",
-                    fact=f"AI Codebase Profile: {fw} ({arch})",
-                    evidence=f"Port {port}"
-                ))
-                if profile.paas_blockers:
-                    for blocker in profile.paas_blockers:
-                        session.facts_ledger.append(LedgerEntry(
-                            category="verified",
-                            fact=f"Host constraint: {blocker}",
-                            evidence="reconnaissance scan"
-                        ))
-                if not profile.paas_compatible:
+                    session.detected_stack = fw
+                    session.app_port = port
+                    session.app_type = fw
+
                     session.facts_ledger.append(LedgerEntry(
                         category="verified",
-                        fact="PaaS feasibility: INCOMPATIBLE (Host Docker socket or privileged mode required)",
-                        evidence="reconnaissance scan"
+                        fact=f"AI Codebase Profile: {fw} ({arch})",
+                        evidence=f"Port {port}"
                     ))
+                    if deps:
+                        session.facts_ledger.append(LedgerEntry(
+                            category="verified",
+                            fact=f"Detected external dependencies: {', '.join(deps)}",
+                            evidence="AI code analysis"
+                        ))
+                    if summary:
+                        session.facts_ledger.append(LedgerEntry(
+                            category="verified",
+                            fact=summary,
+                            evidence="AI synthesis"
+                        ))
 
-                # Update setup status if active
-                status_resp = self.setup_statuses.get(session.session_id)
-                if status_resp:
-                    status_resp.detected_stack = fw
-                    if len(status_resp.steps) >= 5:
-                        status_resp.steps[3].status = "completed"
-                        status_resp.steps[3].detail = f"AI identified {fw} (port {port})."
-                        status_resp.steps[4].label = f"Ready. {fw}"
-                        status_resp.steps[4].detail = summary or profile.project_summary
+                    # Update setup status if active
+                    status_resp = self.setup_statuses.get(session.session_id)
+                    if status_resp:
+                        status_resp.detected_stack = fw
+                        if len(status_resp.steps) >= 5:
+                            status_resp.steps[3].status = "completed"
+                            status_resp.steps[3].detail = f"AI identified {fw} (port {port})."
+                            status_resp.steps[4].label = f"Ready. {fw}"
+                            status_resp.steps[4].detail = summary or f"Architecture: {arch}."
 
-                question_text = profile.consultation_question
-                options = profile.consultation_options
+                    history.append({
+                        "role": "tool",
+                        "tool_call_id": tool_id,
+                        "content": "Profile recorded successfully. Now call ask_user to present your technical findings and deployment options to the developer."
+                    })
+                elif tool_name == "ask_user":
+                    session.stage = StageEnum.INTERVIEW
+                    session.current_tool_call = ToolCall(
+                        id=f"deploy_target_{tool_id}",
+                        tool_name="ask_user",
+                        arguments=args,
+                        status=ToolCallStatus.PENDING_APPROVAL,
+                        requires_approval=True
+                    )
+                    has_pending_approval = True
+                    break
+                elif tool_name in ["write_file", "run_command"]:
+                    if tool_name == "write_file":
+                        fname = args.get("file_path", "").lower()
+                        raw_c = args.get("content", "")
+                        if "dockerfile" in fname:
+                            args["content"] = sanitize_dockerfile_guardrails(raw_c)
+                        elif "compose" in fname or "docker-compose" in str(raw_c).lower():
+                            sanitized_content, stripped = sanitize_compose_guardrails(raw_c)
+                            args["content"] = sanitized_content
+                    session.current_tool_call = ToolCall(
+                        id=tool_id,
+                        tool_name=tool_name,
+                        arguments=args,
+                        status=ToolCallStatus.PENDING_APPROVAL,
+                        requires_approval=True
+                    )
+                    has_pending_approval = True
+                    break
 
-                session.stage = StageEnum.INTERVIEW
-                session.current_tool_call = ToolCall(
-                    id=f"deploy_target_{tool_id}",
-                    tool_name="ask_user",
-                    arguments={
-                        "question_id": "deployment_target",
-                        "question": question_text,
-                        "options": options
-                    },
-                    status=ToolCallStatus.PENDING_APPROVAL,
-                    requires_approval=True
-                )
-                break
-            elif tool_name in ["write_file", "run_command", "ask_user"]:
-                if tool_name == "write_file":
-                    fname = args.get("file_path", "").lower()
-                    raw_c = args.get("content", "")
-                    if "dockerfile" in fname:
-                        args["content"] = sanitize_dockerfile_guardrails(raw_c)
-                    elif "compose" in fname or "docker-compose" in str(raw_c).lower():
-                        sanitized_content, stripped = sanitize_compose_guardrails(raw_c)
-                        args["content"] = sanitized_content
-                tc = ToolCall(
-                    id=tool_id,
-                    tool_name=tool_name,
-                    arguments=args,
-                    status=ToolCallStatus.PENDING_APPROVAL,
-                    requires_approval=True
-                )
-                session.current_tool_call = tc
+            if has_pending_approval:
                 break
 
         return session

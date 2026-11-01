@@ -150,7 +150,9 @@ def _is_safe_repo_path(repo_path: str, target_subpath: str) -> bool:
 def execute_readonly_tool(tool_name: str, args: Dict[str, Any], repo_path: str) -> Dict[str, Any]:
     """Executes read-only tools immediately without requiring user approval."""
     if tool_name == "list_dir":
-        rel_path = args.get("path", "")
+        rel_path = (args.get("path") or "").strip().lstrip("/\\")
+        if rel_path in (".", "repository_root", "root", "./", "/"):
+            rel_path = ""
         if not _is_safe_repo_path(repo_path, rel_path):
             return {"error": "Access denied: Path escapes repository workspace."}
 
@@ -184,7 +186,10 @@ def execute_readonly_tool(tool_name: str, args: Dict[str, Any], repo_path: str) 
         }
 
     elif tool_name == "read_file":
-        file_path = args.get("file_path", "").strip()
+        file_path = args.get("file_path", "").strip().lstrip("/\\")
+        for pfx in ("repository_root/", "root/", "./"):
+            if file_path.startswith(pfx):
+                file_path = file_path[len(pfx):]
         if not _is_safe_repo_path(repo_path, file_path):
             return {"error": "Access denied: Path escapes repository workspace."}
 

@@ -24,7 +24,8 @@ class BedrockClient:
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
-        stage_prompt: Optional[str] = None
+        stage_prompt: Optional[str] = None,
+        force_tool: bool = False
     ) -> Dict[str, Any]:
         # Bedrock Converse format with native toolUse and toolResult blocks
         converse_messages = []
@@ -35,15 +36,19 @@ class BedrockClient:
             if role == "tool":
                 tid = m.get("tool_call_id") or "tooluse_0"
                 t_content = str(m.get("content") or "")
-                converse_messages.append({
-                    "role": "user",
-                    "content": [{
-                        "toolResult": {
-                            "toolUseId": tid,
-                            "content": [{"text": t_content[:3000]}]
-                        }
-                    }]
-                })
+                tool_block = {
+                    "toolResult": {
+                        "toolUseId": tid,
+                        "content": [{"text": t_content[:3000]}]
+                    }
+                }
+                if converse_messages and converse_messages[-1]["role"] == "user" and isinstance(converse_messages[-1]["content"], list) and "toolResult" in converse_messages[-1]["content"][0]:
+                    converse_messages[-1]["content"].append(tool_block)
+                else:
+                    converse_messages.append({
+                        "role": "user",
+                        "content": [tool_block]
+                    })
                 continue
 
             # Handle assistant tool calls
@@ -114,6 +119,8 @@ class BedrockClient:
                     for t in tools
                 ]
             }
+            if force_tool:
+                tool_cfg["toolChoice"] = {"any": {}}
             kwargs["toolConfig"] = tool_cfg
 
         response = self.client.converse(**kwargs)
@@ -148,10 +155,11 @@ class BedrockClient:
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
-        stage_prompt: Optional[str] = None
+        stage_prompt: Optional[str] = None,
+        force_tool: bool = False
     ) -> Dict[str, Any]:
         try:
-            return await asyncio.to_thread(self._converse_sync, messages, tools, stage_prompt)
+            return await asyncio.to_thread(self._converse_sync, messages, tools, stage_prompt, force_tool)
         except Exception as e:
             return {
                 "role": "assistant",
@@ -261,8 +269,9 @@ class UnifiedLLMClient:
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
-        stage_prompt: Optional[str] = None
+        stage_prompt: Optional[str] = None,
+        force_tool: bool = False
     ) -> Dict[str, Any]:
-        return await self.backend.chat(messages, tools, stage_prompt)
+        return await self.backend.chat(messages, tools, stage_prompt, force_tool)
 
 llm_client = UnifiedLLMClient()
