@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # Amazon Bedrock Configuration
     AWS_REGION: str = os.getenv("AWS_REGION", "ap-south-1")
-    BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "google.gemma-3-4b-it")
+    BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-pro-v1:0")
     BEDROCK_GUARDRAIL_ID: str = os.getenv("BEDROCK_GUARDRAIL_ID", "a0w9ieteu3yl")
     BEDROCK_GUARDRAIL_VERSION: str = os.getenv("BEDROCK_GUARDRAIL_VERSION", "2")
 

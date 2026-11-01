@@ -281,66 +281,72 @@ class SessionManager:
         else:
             steps[2].detail = "No secret files detected. Privacy boundary verified."
 
-        # Step 4: AI Codebase Inspection
-        steps[3].label = "Analyzing application architecture with AI…"
+        # Step 4: Codebase Reconnaissance & Stack Discovery
+        steps[3].label = "Analyzing codebase architecture…"
         steps[3].status = "running"
-        steps[3].detail = "AI inspecting directory structure, package manifests, and server configuration."
+        steps[3].detail = "Scanning project layout, subdirectories, package manifests, and server entrypoints."
+
+        detected_stack, detected_port = self._detect_stack(target_dir)
+
+        steps[3].status = "completed"
+        steps[3].detail = f"Identified {detected_stack} (port {detected_port})."
+        status_resp.detected_stack = detected_stack
+
+        # Step 5: Ready Hand-off
+        steps[4].label = f"Ready. {detected_stack}."
+        steps[4].status = "completed"
+        steps[4].detail = "Ephemeral sandbox ready. Commencing DevOps infrastructure consultation."
+        status_resp.completed = True
+
+        summary_msg = (
+            f"I have inspected **{repo_name}** and mapped its codebase architecture:\n\n"
+            f"- **Stack**: **{detected_stack}**\n"
+            f"- **Discovered Port**: `{detected_port}`\n\n"
+            f"I have provisioned an isolated container sandbox for testing your build."
+        )
+
+        question_text = (
+            f"I analyzed your codebase: it is a **{detected_stack}** (service port `{detected_port}`). "
+            f"Before generating deployment configurations, where do you plan to deploy this application?"
+        )
+        options = [
+            "Cloud IaaS (AWS ECS / GCP Cloud Run / Azure)",
+            "PaaS (Render / Railway / Fly.io)",
+            "Self-Managed VPS (Docker Compose + Nginx/Caddy)",
+            "Local Staging Sandbox"
+        ]
 
         session = SessionState(
             session_id=session_id,
-            stage=StageEnum.INSPECT,
+            stage=StageEnum.INTERVIEW,
             repo_path=target_dir,
             repo_url=repo_url,
-            detected_stack="Analyzing...",
+            detected_stack=detected_stack,
             quarantined_secrets=quarantined,
-            app_type="Analyzing...",
-            app_port=None,
+            app_type=detected_stack,
+            app_port=detected_port,
             facts_ledger=[
+                LedgerEntry(category="declared", fact=f"Framework stack: {detected_stack}", evidence=os.path.basename(target_dir)),
+                LedgerEntry(category="declared", fact=f"Configured service port: {detected_port}", evidence="manifest analysis"),
                 LedgerEntry(category="verified", fact=f"Quarantine scan: {len(quarantined)} secret file(s) isolated", evidence="safety scanner"),
             ],
-            messages=[],
-            current_tool_call=None,
+            messages=[
+                ChatMessage(role="assistant", content=summary_msg)
+            ],
+            current_tool_call=ToolCall(
+                id=f"deploy_target_{str(uuid.uuid4())[:8]}",
+                tool_name="ask_user",
+                arguments={
+                    "question_id": "deployment_target",
+                    "question": question_text,
+                    "options": options
+                },
+                status=ToolCallStatus.PENDING_APPROVAL,
+                requires_approval=True
+            ),
             last_activity=time.time()
         )
         self.sessions[session_id] = session
-
-        # Launch autonomous AI Codebase Inspection step
-        initial_instruction = (
-            f"Please inspect the newly loaded repository '{repo_name}'. "
-            f"Explore the directory structure using `list_dir`. Inspect subdirectories, manifests (package.json, requirements.txt, pyproject.toml, etc.), and server code using `read_file`. "
-            f"Call `declare_stack_profile` with your discovered stack, port, and architecture. "
-            f"If this is a monorepo or has multiple services, call `ask_user` with tailored options on how the developer wants to containerize the components. "
-            f"If it is a single-service application with clear conventions, explain your plan and propose the Dockerfile via `write_file`."
-        )
-        await self.step(session_id, extra_instruction=initial_instruction)
-
-        # Fallback safeguard if AI did not declare stack
-        if session.detected_stack == "Analyzing...":
-            fallback_stack, fallback_port = self._detect_stack(target_dir)
-            session.detected_stack = fallback_stack
-            session.app_port = fallback_port
-            session.app_type = fallback_stack
-
-        steps[3].status = "completed"
-        steps[3].detail = f"Identified {session.detected_stack} (port {session.app_port or 8000})."
-        status_resp.detected_stack = session.detected_stack
-
-        # Ensure assistant summary message is recorded in chat
-        if not session.messages:
-            summary_msg = (
-                f"I have inspected **{repo_name}** and mapped its codebase architecture:\n\n"
-                f"- **Stack**: {session.detected_stack}\n"
-                f"- **Configured Port**: `{session.app_port or 8000}`\n\n"
-                f"I have provisioned your ephemeral sandbox. Review the configuration below to proceed."
-            )
-            session.messages.append(ChatMessage(role="assistant", content=summary_msg))
-
-        # Step 5: Ready Hand-off
-        steps[4].label = f"Ready. {session.detected_stack}."
-        steps[4].status = "completed"
-        steps[4].detail = "Ephemeral sandbox ready. Proceeding with deployment."
-        status_resp.completed = True
-
         return session
 
     async def get_or_create_session(
@@ -412,23 +418,33 @@ class SessionManager:
             else:
                 args = raw_args
 
-            tool_id = str(uuid.uuid4())[:8]
+            if tool_calls:
+                history.append({"role": "assistant", "content": content, "tool_calls": tool_calls})
+                tool_id = tool_calls[0].get("id") or str(uuid.uuid4())[:8]
+            else:
+                tool_id = str(uuid.uuid4())[:8]
 
             if tool_name in ["list_dir", "read_file"]:
                 exec_result = execute_readonly_tool(tool_name, args, session.repo_path)
                 result_str = str(exec_result.get("entries") or exec_result.get("content") or exec_result)
-                # Feed inspection result back into conversation history so the model can proceed
                 history.append({
-                    "role": "user",
-                    "content": f"[Result of {tool_name}]:\n{result_str[:1500]}"
+                    "role": "tool",
+                    "tool_call_id": tool_id,
+                    "content": result_str[:2500]
                 })
                 continue
             elif tool_name == "declare_stack_profile":
-                fw = args.get("framework") or "Application Service"
-                port = args.get("port") or 8000
-                arch = args.get("architecture") or "single-service"
+                fw = args.get("framework") or ""
+                arch = args.get("architecture") or "monorepo"
                 summary = args.get("summary") or ""
                 deps = args.get("detected_dependencies") or []
+
+                if not fw or fw.lower() in ("unknown", "generic application", "generic", "application service"):
+                    fallback_fw, fallback_port = self._detect_stack(session.repo_path)
+                    fw = fallback_fw
+                    port = args.get("port") or fallback_port
+                else:
+                    port = args.get("port") or 8000
 
                 session.detected_stack = fw
                 session.app_port = port

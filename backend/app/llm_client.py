@@ -26,14 +26,54 @@ class BedrockClient:
         tools: Optional[List[Dict[str, Any]]] = None,
         stage_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
-        # Bedrock Converse requires alternating roles and content as a list of blocks
+        # Bedrock Converse format with native toolUse and toolResult blocks
         converse_messages = []
         for m in messages:
             role = m.get("role", "user")
+
+            # Handle tool result from step tool execution loop
+            if role == "tool":
+                tid = m.get("tool_call_id") or "tooluse_0"
+                t_content = str(m.get("content") or "")
+                converse_messages.append({
+                    "role": "user",
+                    "content": [{
+                        "toolResult": {
+                            "toolUseId": tid,
+                            "content": [{"text": t_content[:3000]}]
+                        }
+                    }]
+                })
+                continue
+
+            # Handle assistant tool calls
+            if role == "assistant" and m.get("tool_calls"):
+                blocks = []
+                txt = (m.get("content") or "").strip()
+                if txt:
+                    blocks.append({"text": txt})
+                for tc in m["tool_calls"]:
+                    func = tc.get("function", {})
+                    args = func.get("arguments", {})
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                        except Exception:
+                            args = {}
+                    blocks.append({
+                        "toolUse": {
+                            "toolUseId": tc.get("id") or "tooluse_0",
+                            "name": func.get("name", ""),
+                            "input": args
+                        }
+                    })
+                converse_messages.append({"role": "assistant", "content": blocks})
+                continue
+
             content = (m.get("content") or "").strip()
             if not content:
                 continue
-            if converse_messages and converse_messages[-1]["role"] == role:
+            if converse_messages and converse_messages[-1]["role"] == role and isinstance(converse_messages[-1]["content"], list) and "text" in converse_messages[-1]["content"][-1]:
                 converse_messages[-1]["content"].append({"text": content})
             else:
                 converse_messages.append({"role": role, "content": [{"text": content}]})
@@ -42,13 +82,13 @@ class BedrockClient:
         if not converse_messages or converse_messages[0]["role"] != "user":
             converse_messages.insert(0, {
                 "role": "user",
-                "content": [{"text": "Inspect the repository and prepare the container deployment plan."}]
+                "content": [{"text": "Inspect the repository and prepare the deployment plan."}]
             })
 
         kwargs: Dict[str, Any] = {
             "modelId": self.model_id,
             "messages": converse_messages,
-            "inferenceConfig": {"maxTokens": 1024, "temperature": 0.1}
+            "inferenceConfig": {"maxTokens": 2048, "temperature": 0.1}
         }
 
         if stage_prompt:
@@ -74,8 +114,6 @@ class BedrockClient:
                     for t in tools
                 ]
             }
-            if "gemma" in self.model_id.lower():
-                tool_cfg["toolChoice"] = {"any": {}}
             kwargs["toolConfig"] = tool_cfg
 
         response = self.client.converse(**kwargs)
