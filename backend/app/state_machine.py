@@ -88,73 +88,73 @@ class SessionManager:
         os.makedirs(self.workspace_root, exist_ok=True)
 
     def _detect_stack(self, repo_path: str) -> Tuple[str, Optional[int]]:
-        """Analyzes repo manifests to determine language framework, entrypoint, and port."""
-        app_type = "Generic Application"
-        port = 8000
+        """
+        Deep recursive scan (up to 2 levels deep) to identify single-service and multi-service monorepos.
+        """
+        discovered = {}
+        if not os.path.exists(repo_path):
+            return "Generic Application", 8000
 
-        # Check Node.js
-        pkg_json = os.path.join(repo_path, "package.json")
-        if os.path.exists(pkg_json):
-            try:
-                with open(pkg_json, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-                port = 3000
-                if "express" in deps:
-                    app_type = "Node.js Express application"
-                elif "next" in deps:
-                    app_type = "Next.js application"
-                elif "nest" in deps or "@nestjs/core" in deps:
-                    app_type = "NestJS application"
-                elif "fastify" in deps:
-                    app_type = "Fastify application"
-                else:
-                    app_type = "Node.js application"
-                return app_type, port
-            except Exception:
-                return "Node.js application", 3000
+        for root, dirs, files in os.walk(repo_path):
+            rel = os.path.relpath(root, repo_path)
+            depth = len(rel.split(os.sep)) if rel != "." else 0
+            if depth > 2:
+                continue
+            if ".git" in dirs: dirs.remove(".git")
+            if "node_modules" in dirs: dirs.remove("node_modules")
+            if "venv" in dirs: dirs.remove("venv")
 
-        # Check Python
-        req_txt = os.path.join(repo_path, "requirements.txt")
-        pyproject = os.path.join(repo_path, "pyproject.toml")
-        if os.path.exists(req_txt) or os.path.exists(pyproject):
-            content = ""
-            if os.path.exists(req_txt):
+            # Check Node.js
+            if "package.json" in files:
                 try:
-                    with open(req_txt, "r", encoding="utf-8") as f:
-                        content += f.read().lower()
+                    with open(os.path.join(root, "package.json"), "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
+                    framework = "Node.js"
+                    port = 3000
+                    if "express" in deps: framework = "Node.js (Express)"
+                    elif "next" in deps: framework = "Next.js"
+                    elif "react" in deps or "react-dom" in deps: framework = "React (Vite)"
+                    elif "vue" in deps: framework = "Vue.js"
+                    discovered[rel] = {"type": "node", "framework": framework, "port": port}
                 except Exception:
-                    pass
-            if os.path.exists(pyproject):
-                try:
-                    with open(pyproject, "r", encoding="utf-8") as f:
-                        content += f.read().lower()
-                except Exception:
-                    pass
+                    discovered[rel] = {"type": "node", "framework": "Node.js", "port": 3000}
 
-            if "fastapi" in content:
-                app_type = "Python FastAPI application"
+            # Check Python
+            if "requirements.txt" in files or "pyproject.toml" in files:
+                content = ""
+                for req_f in ["requirements.txt", "pyproject.toml"]:
+                    p = os.path.join(root, req_f)
+                    if os.path.exists(p):
+                        try:
+                            with open(p, "r", encoding="utf-8") as f: content += f.read().lower()
+                        except Exception: pass
+                framework = "Python"
                 port = 8000
-            elif "flask" in content:
-                app_type = "Python Flask application"
-                port = 5000
-            elif "django" in content:
-                app_type = "Python Django application"
-                port = 8000
-            else:
-                app_type = "Python application"
-                port = 8000
-            return app_type, port
+                if "fastapi" in content: framework = "Python (FastAPI)"
+                elif "flask" in content: framework = "Python (Flask)"; port = 5000
+                elif "django" in content: framework = "Python (Django)"
+                discovered[rel] = {"type": "python", "framework": framework, "port": port}
 
-        # Check Go
-        if os.path.exists(os.path.join(repo_path, "go.mod")):
-            return "Go service", 8080
+            # Check Go
+            if "go.mod" in files:
+                discovered[rel] = {"type": "go", "framework": "Go Service", "port": 8080}
 
-        # Check Rust
-        if os.path.exists(os.path.join(repo_path, "Cargo.toml")):
-            return "Rust service", 8080
+            # Check Rust
+            if "Cargo.toml" in files:
+                discovered[rel] = {"type": "rust", "framework": "Rust Service", "port": 8080}
 
-        return app_type, port
+        if not discovered:
+            return "Generic Application", 8000
+
+        # Monorepo / Multi-service check
+        frameworks = list(dict.fromkeys(s["framework"] for s in discovered.values()))
+        if len(discovered) > 1 or len(frameworks) > 1:
+            fw_label = " + ".join(frameworks[:2])
+            return f"Full-Stack Monorepo ({fw_label})", 3000
+
+        first_s = list(discovered.values())[0]
+        return first_s["framework"], first_s["port"]
 
     def initialize_workspace_sync(
         self,

@@ -76,6 +76,18 @@ async def send_user_message(session_id: str, req: UserMessageRequest):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
+    msg_clean = req.message.strip().lower()
+    # Context-aware developer greeting handling (prevents generic guardrail deflection on hi/hello)
+    if msg_clean in ["hi", "hello", "hey", "yo", "help"]:
+        repo_name = os.path.basename(session.repo_path)
+        greeting_text = (
+            f"Hello! I am ready to help you containerize **{repo_name}** ({session.detected_stack}). "
+            f"To get started, please select whether your application requires a companion database (PostgreSQL, MongoDB, Redis) or if it is completely stateless using the choice card below."
+        )
+        session.messages.append(ChatMessage(role="user", content=req.message))
+        session.messages.append(ChatMessage(role="assistant", content=greeting_text))
+        return session
+
     # Message recorded; prompt injection and topic boundaries handled natively by Bedrock Guardrail
     session.messages.append(ChatMessage(role="user", content=req.message))
     if session.stage == StageEnum.INTERVIEW:
