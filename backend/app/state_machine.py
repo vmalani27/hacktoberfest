@@ -31,30 +31,34 @@ from app.config import settings
 
 STAGE_PROMPTS = {
     StageEnum.INSPECT: (
-        "You are an expert containerization and deployment assistant. "
-        "Inspect the repository structure using `list_dir` and `read_file`. "
-        "MANDATORY: When creating or updating files (Dockerfile, docker-compose.yml), you MUST call the `write_file` tool. "
-        "Do not print raw file code blocks in your chat response. Propose the Dockerfile using `write_file`."
+        "You are an expert autonomous DevOps architect.\n"
+        "A codebase has been loaded into your ephemeral workspace sandbox.\n"
+        "DO NOT GUESS OR ASSUME. You MUST inspect the codebase thoroughly before making decisions:\n"
+        "1. Call `list_dir` to explore the root directory structure.\n"
+        "2. If you see subdirectories like `backend`, `frontend`, `services`, `api`, `client`, `web`, inspect them with `list_dir` and read their respective manifests (`package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml`, `Gemfile`, `go.mod`, etc.) using `read_file`.\n"
+        "3. Read server entrypoints (e.g. server.js, main.py, app.py, vite.config.ts) to find ports, framework versions, and routes.\n"
+        "4. Call `declare_stack_profile` to register your findings (framework, port, architecture, dependencies, summary).\n"
+        "5. If the repository is a monorepo or has multiple services, call `ask_user` with tailored options on how the developer wants to containerize the architecture (e.g. multi-service compose, backend only, or unified container).\n"
+        "6. If the repository is a single-service app with clear requirements, explain your analysis and propose the Dockerfile via `write_file`."
     ),
     StageEnum.INTERVIEW: (
-        "You are an expert deployment assistant. "
-        "The developer has specified their requirements. Now proceed immediately to creating the deployment configuration. "
-        "MANDATORY: You MUST call the `write_file` tool with file_path='Dockerfile' and the optimized Dockerfile content. "
-        "CRITICAL DOCKERFILE SYNTAX: Arguments MUST have spaces! Write 'COPY package*.json ./' (NOT 'package*.json./') and 'COPY . .' (NOT 'COPY..'). "
-        "Do NOT print the full Dockerfile code block in chat text; use the `write_file` tool so the user receives the interactive approval card."
+        "You are an expert DevOps architect. "
+        "The developer has answered your architectural questions. "
+        "Synthesize the architecture and proceed immediately to creating the deployment manifests using `write_file`. "
+        "If multi-service, generate the appropriate Dockerfiles (e.g. `backend/Dockerfile`, `frontend/Dockerfile`) and `docker-compose.yml`. "
+        "CRITICAL DOCKERFILE SYNTAX: Arguments MUST have spaces! Write 'COPY package*.json ./' and 'COPY . .'. "
+        "Do NOT write code blocks in chat prose; always invoke `write_file`."
     ),
     StageEnum.PLAN: (
-        "You are preparing containerization artifacts. "
-        "MANDATORY: Propose the Dockerfile by calling the `write_file` tool call. "
-        "Do NOT write file contents in chat prose; always use the `write_file` tool."
+        "You are preparing deployment artifacts for this verified architecture. "
+        "Invoke `write_file` to propose the container configuration."
     ),
     StageEnum.EXECUTE: (
         "You are creating containerization artifacts for this application.\n"
         "MANDATORY SECURITY GUARDRAILS:\n"
-        "1. ZERO HOST MOUNTS: In `docker-compose.yml`, NEVER mount host application directories (e.g. NEVER write `volumes: - .:/app` or `.:/usr/src/app`). All application code must be self-contained inside the image via Dockerfile `COPY . .`. Do NOT include host binds.\n"
+        "1. ZERO HOST MOUNTS: In `docker-compose.yml`, NEVER mount host application directories (e.g. NEVER write `volumes: - .:/app` or `.:/usr/src/app`). Code must be self-contained in the container image.\n"
         "2. ZERO CHAT DELAYS: Never output 'I will write this file' in chat prose. Directly invoke the `write_file` tool call in the same turn.\n"
-        "3. ZERO SECRETS: Never ask for or write real passwords or tokens. Always use `.env.example` with placeholder values.\n"
-        "To test or build containers inside the sandbox, you MUST call the `run_command` tool."
+        "3. ZERO SECRETS: Never ask for or write real passwords or tokens. Always use `.env.example` with placeholder values."
     ),
     StageEnum.VERIFY: (
         "Verify the running container by querying its health endpoint using `run_command` (e.g., `curl -I http://localhost:<port>`). "
@@ -176,7 +180,7 @@ class SessionManager:
         first_s = list(discovered.values())[0]
         return first_s["framework"], first_s["port"]
 
-    def initialize_workspace_sync(
+    async def initialize_workspace(
         self,
         session_id: str,
         repo_url: Optional[str] = None,
@@ -272,63 +276,69 @@ class SessionManager:
         else:
             steps[2].detail = "No secret files detected. Privacy boundary verified."
 
-        # Step 4: Inspect stack
+        # Step 4: AI Codebase Inspection
+        steps[3].label = "Analyzing application architecture with AI…"
         steps[3].status = "running"
-        detected_stack, detected_port = self._detect_stack(target_dir)
-        status_resp.detected_stack = detected_stack
-        steps[3].status = "completed"
-        steps[3].detail = f"Identified {detected_stack} (default port {detected_port})."
-
-        # Step 5: Ready Hand-off
-        steps[4].label = f"Ready. This looks like a {detected_stack}."
-        steps[4].status = "completed"
-        steps[4].detail = "Handing off to interactive deployment interview."
-        status_resp.completed = True
-
-        # Initialize Session State
-        initial_content = f"Identified **{detected_stack}** (default port `{detected_port}`). Provisioned an isolated sandbox for your build."
+        steps[3].detail = "AI inspecting directory structure, package manifests, and server configuration."
 
         session = SessionState(
             session_id=session_id,
-            stage=StageEnum.INTERVIEW,
+            stage=StageEnum.INSPECT,
             repo_path=target_dir,
             repo_url=repo_url,
-            detected_stack=detected_stack,
+            detected_stack="Analyzing...",
             quarantined_secrets=quarantined,
-            app_type=detected_stack,
-            app_port=detected_port,
+            app_type="Analyzing...",
+            app_port=None,
             facts_ledger=[
-                LedgerEntry(category="declared", fact=f"Framework stack: {detected_stack}", evidence=os.path.basename(target_dir)),
-                LedgerEntry(category="declared", fact=f"Configured service port: {detected_port}", evidence="manifest analysis"),
                 LedgerEntry(category="verified", fact=f"Quarantine scan: {len(quarantined)} secret file(s) isolated", evidence="safety scanner"),
-                LedgerEntry(category="assumed", fact="Single service architecture target", evidence="pre-interview inference"),
             ],
-            messages=[
-                ChatMessage(role="assistant", content=initial_content)
-            ],
-            current_tool_call=ToolCall(
-                id="q_database",
-                tool_name="ask_user",
-                arguments={
-                    "question_id": "db_type",
-                    "question": "Does this application require a companion database, or is it completely stateless?",
-                    "options": [
-                        "Stateless (No Database)",
-                        "PostgreSQL",
-                        "MongoDB",
-                        "Redis"
-                    ]
-                },
-                status=ToolCallStatus.PENDING_APPROVAL,
-                requires_approval=True
-            ),
+            messages=[],
+            current_tool_call=None,
             last_activity=time.time()
         )
-
         self.sessions[session_id] = session
+
+        # Launch autonomous AI Codebase Inspection step
+        initial_instruction = (
+            f"Please inspect the newly loaded repository '{repo_name}'. "
+            f"Explore the directory structure using `list_dir`. Inspect subdirectories, manifests (package.json, requirements.txt, pyproject.toml, etc.), and server code using `read_file`. "
+            f"Call `declare_stack_profile` with your discovered stack, port, and architecture. "
+            f"If this is a monorepo or has multiple services, call `ask_user` with tailored options on how the developer wants to containerize the components. "
+            f"If it is a single-service application with clear conventions, explain your plan and propose the Dockerfile via `write_file`."
+        )
+        await self.step(session_id, extra_instruction=initial_instruction)
+
+        # Fallback safeguard if AI did not declare stack
+        if session.detected_stack == "Analyzing...":
+            fallback_stack, fallback_port = self._detect_stack(target_dir)
+            session.detected_stack = fallback_stack
+            session.app_port = fallback_port
+            session.app_type = fallback_stack
+
+        steps[3].status = "completed"
+        steps[3].detail = f"Identified {session.detected_stack} (port {session.app_port or 8000})."
+        status_resp.detected_stack = session.detected_stack
+
+        # Ensure assistant summary message is recorded in chat
+        if not session.messages:
+            summary_msg = (
+                f"I have inspected **{repo_name}** and mapped its codebase architecture:\n\n"
+                f"- **Stack**: {session.detected_stack}\n"
+                f"- **Configured Port**: `{session.app_port or 8000}`\n\n"
+                f"I have provisioned your ephemeral sandbox. Review the configuration below to proceed."
+            )
+            session.messages.append(ChatMessage(role="assistant", content=summary_msg))
+
+        # Step 5: Ready Hand-off
+        steps[4].label = f"Ready. {session.detected_stack}."
+        steps[4].status = "completed"
+        steps[4].detail = "Ephemeral sandbox ready. Proceeding with deployment."
+        status_resp.completed = True
+
         return session
 
-    def get_or_create_session(
+    async def get_or_create_session(
         self,
         session_id: Optional[str] = None,
         repo_url: Optional[str] = None,
@@ -339,7 +349,7 @@ class SessionManager:
             self.sessions[sid].last_activity = time.time()
             return self.sessions[sid]
 
-        return self.initialize_workspace_sync(session_id=sid, repo_url=repo_url, local_path=repo_path)
+        return await self.initialize_workspace(session_id=sid, repo_url=repo_url, local_path=repo_path)
 
     async def step(self, session_id: str, extra_instruction: Optional[str] = None) -> SessionState:
         session = self.sessions.get(session_id)
@@ -367,8 +377,8 @@ class SessionManager:
         if extra_instruction:
             history.append({"role": "user", "content": extra_instruction})
 
-        # Autonomous tool-use loop (handles readonly inspection tools like list_dir and read_file)
-        for loop_idx in range(4):
+        # Autonomous tool-use loop (handles readonly inspection tools like list_dir, read_file, declare_stack_profile)
+        for loop_idx in range(10):
             response = await llm_client.chat(
                 messages=history,
                 tools=TOOL_DEFINITIONS,
@@ -402,10 +412,61 @@ class SessionManager:
             if tool_name in ["list_dir", "read_file"]:
                 exec_result = execute_readonly_tool(tool_name, args, session.repo_path)
                 result_str = str(exec_result.get("entries") or exec_result.get("content") or exec_result)
-                # Feed inspection result back into conversation history so the model can proceed to write_file
+                # Feed inspection result back into conversation history so the model can proceed
                 history.append({
                     "role": "user",
-                    "content": f"[Result of {tool_name}]:\n{result_str[:1200]}"
+                    "content": f"[Result of {tool_name}]:\n{result_str[:1500]}"
+                })
+                continue
+            elif tool_name == "declare_stack_profile":
+                fw = args.get("framework") or "Application Service"
+                port = args.get("port") or 8000
+                arch = args.get("architecture") or "single-service"
+                summary = args.get("summary") or ""
+                deps = args.get("detected_dependencies") or []
+
+                session.detected_stack = fw
+                session.app_port = port
+                session.app_type = fw
+
+                session.facts_ledger.append(LedgerEntry(
+                    category="verified",
+                    fact=f"AI Codebase Profile: {fw} ({arch})",
+                    evidence=f"Port {port}"
+                ))
+                if deps:
+                    session.facts_ledger.append(LedgerEntry(
+                        category="verified",
+                        fact=f"Detected external dependencies: {', '.join(deps)}",
+                        evidence="manifest inspection"
+                    ))
+
+                # Update setup status if active
+                status_resp = self.setup_statuses.get(session.session_id)
+                if status_resp:
+                    status_resp.detected_stack = fw
+                    if len(status_resp.steps) >= 5:
+                        status_resp.steps[3].status = "completed"
+                        status_resp.steps[3].detail = f"AI identified {fw} (port {port})."
+                        status_resp.steps[4].label = f"Ready. {fw}"
+                        status_resp.steps[4].detail = summary or f"Architecture: {arch}."
+
+                if "monorepo" in arch.lower() or "multi" in arch.lower() or "microservice" in arch.lower():
+                    next_instruction = (
+                        f"Architecture profile confirmed: {fw} ({arch}). "
+                        f"Because this codebase contains multiple services or components, you MUST now call `ask_user` "
+                        f"with a question asking the developer how they want to deploy the services "
+                        f"(e.g. 'Full-Stack Compose (frontend + backend)', 'Backend API only', 'Frontend only')."
+                    )
+                else:
+                    next_instruction = (
+                        f"Architecture profile confirmed: {fw} on port {port}. "
+                        f"Proceed immediately to propose the production containerization by calling `write_file` with file_path='Dockerfile'."
+                    )
+
+                history.append({
+                    "role": "user",
+                    "content": f"[Result of declare_stack_profile]: {next_instruction}"
                 })
                 continue
             elif tool_name in ["write_file", "run_command", "ask_user"]:

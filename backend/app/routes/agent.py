@@ -7,7 +7,7 @@ router = APIRouter(prefix="/ws", tags=["WebSocket"])
 @router.websocket("/agent/{session_id}")
 async def agent_websocket(websocket: WebSocket, session_id: str):
     await websocket.accept()
-    session = session_manager.get_or_create_session(session_id=session_id)
+    session = await session_manager.get_or_create_session(session_id=session_id)
     
     # Send initial state snapshot
     await websocket.send_text(json.dumps({

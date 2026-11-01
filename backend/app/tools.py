@@ -101,7 +101,41 @@ TOOL_DEFINITIONS = [
                 "required": ["question_id", "question"]
             }
         }
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "declare_stack_profile",
+            "description": "Declare the discovered application profile after inspecting repository files (stack, architecture, service port, dependencies). Call this during inspection.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "framework": {
+                        "type": "string",
+                        "description": "Primary framework and language (e.g. 'Node.js (Express + Socket.io)', 'Python (FastAPI)', 'Go Service', 'Ruby on Rails', 'Next.js + Flask Monorepo')"
+                    },
+                    "port": {
+                        "type": "integer",
+                        "description": "Discovered listening port for the main application service (e.g. 5007, 8000, 3000, 8080)"
+                    },
+                    "architecture": {
+                        "type": "string",
+                        "description": "Architecture archetype: 'single-service', 'monorepo', 'microservices', or 'static-spa'"
+                    },
+                    "detected_dependencies": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Detected backing services or databases (e.g. ['PostgreSQL', 'Redis', 'MongoDB']) or empty if stateless"
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "Concise 1-2 sentence technical summary of the codebase architecture"
+                    }
+                },
+                "required": ["framework", "port", "architecture"]
+            }
+        }
+    },
 ]
 
 def _is_safe_repo_path(repo_path: str, target_subpath: str) -> bool:
@@ -139,6 +173,15 @@ def execute_readonly_tool(tool_name: str, args: Dict[str, Any], repo_path: str) 
             return {"entries": files}
         except Exception as e:
             return {"error": str(e)}
+
+    elif tool_name == "declare_stack_profile":
+        fw = args.get("framework", "Application Service")
+        port = args.get("port", 8000)
+        arch = args.get("architecture", "single-service")
+        return {
+            "status": "success",
+            "message": f"Successfully declared stack profile: {fw} (port {port}, architecture: {arch})."
+        }
 
     elif tool_name == "read_file":
         file_path = args.get("file_path", "").strip()

@@ -33,7 +33,7 @@ def validate_url(req: Dict[str, str]):
 @router.post("/init", response_model=SessionState)
 async def init_session(req: SessionInitRequest):
     try:
-        session = session_manager.get_or_create_session(
+        session = await session_manager.get_or_create_session(
             session_id=req.session_id,
             repo_url=req.repo_url,
             repo_path=req.local_path
@@ -80,9 +80,11 @@ async def send_user_message(session_id: str, req: UserMessageRequest):
     # Context-aware developer greeting handling (prevents generic guardrail deflection on hi/hello)
     if msg_clean in ["hi", "hello", "hey", "yo", "help"]:
         repo_name = os.path.basename(session.repo_path)
+        stack_desc = session.detected_stack if session.detected_stack != "Analyzing..." else "your application"
+        port_desc = f" (port {session.app_port})" if session.app_port else ""
         greeting_text = (
-            f"Hello! I am ready to help you containerize **{repo_name}** ({session.detected_stack}). "
-            f"To get started, please select whether your application requires a companion database (PostgreSQL, MongoDB, Redis) or if it is completely stateless using the choice card below."
+            f"Hello! I am your AI DevOps engineer. I have analyzed **{repo_name}** as **{stack_desc}**{port_desc}. "
+            f"I have provisioned your ephemeral sandbox workspace. Let me know if you have specific infrastructure requirements, or review and apply the proposed deployment artifacts to begin verification."
         )
         session.messages.append(ChatMessage(role="user", content=req.message))
         session.messages.append(ChatMessage(role="assistant", content=greeting_text))
