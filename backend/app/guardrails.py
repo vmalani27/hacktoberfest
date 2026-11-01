@@ -151,6 +151,25 @@ def validate_git_url(url: str) -> Tuple[bool, str, Optional[str]]:
     repo_name = path.split("/")[-1]
     return True, "", repo_name
 
+def sanitize_dockerfile_guardrails(content: str) -> str:
+    """
+    Sanitizes Dockerfile syntax, fixing common LLM token-merging errors:
+    - Missing spaces before destination dots or slashes: 'COPY package*.json./' -> 'COPY package*.json ./'
+    - Merged COPY dots: 'COPY..' -> 'COPY . .'
+    - Merged ADD dots: 'ADD..' -> 'ADD . .'
+    """
+    if not content:
+        return ""
+    lines = content.splitlines()
+    cleaned_lines = []
+    for line in lines:
+        # Fix COPY.. or ADD..
+        l = re.sub(r'^(COPY|ADD)\s*\.\.', r'\1 . .', line, flags=re.IGNORECASE)
+        # Fix missing space before destination dot or ./
+        l = re.sub(r'^(COPY|ADD)\s+(.+?)(?<!\s)(\.|\.\/)$', r'\1 \2 \3', l, flags=re.IGNORECASE)
+        cleaned_lines.append(l)
+    return "\n".join(cleaned_lines)
+
 def sanitize_compose_guardrails(content: str) -> Tuple[str, List[str]]:
     """
     Enforces the Zero Host Mounts security guardrail.
@@ -163,6 +182,7 @@ def sanitize_compose_guardrails(content: str) -> Tuple[str, List[str]]:
     violations = []
 
     for line in lines:
+        line = re.sub(r'^(\s*(?:build|context)):(?!\s)', r'\1: ', line)
         stripped = line.strip()
         if stripped.startswith("-") and ":" in stripped:
             entry = stripped.lstrip("- ").strip()

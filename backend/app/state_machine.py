@@ -19,7 +19,8 @@ from app.guardrails import (
     is_app_code_error,
     scan_and_quarantine_secrets,
     validate_git_url,
-    sanitize_compose_guardrails
+    sanitize_compose_guardrails,
+    sanitize_dockerfile_guardrails
 )
 from app.tools import execute_readonly_tool, execute_approved_tool, TOOL_DEFINITIONS
 from app.llm_client import llm_client
@@ -37,6 +38,7 @@ STAGE_PROMPTS = {
         "You are an expert deployment assistant. "
         "The developer has specified their requirements. Now proceed immediately to creating the deployment configuration. "
         "MANDATORY: You MUST call the `write_file` tool with file_path='Dockerfile' and the optimized Dockerfile content. "
+        "CRITICAL DOCKERFILE SYNTAX: Arguments MUST have spaces! Write 'COPY package*.json ./' (NOT 'package*.json./') and 'COPY . .' (NOT 'COPY..'). "
         "Do NOT print the full Dockerfile code block in chat text; use the `write_file` tool so the user receives the interactive approval card."
     ),
     StageEnum.PLAN: (
@@ -385,9 +387,14 @@ class SessionManager:
                 })
                 continue
             elif tool_name in ["write_file", "run_command", "ask_user"]:
-                if tool_name == "write_file" and ("compose" in args.get("file_path", "").lower() or "docker-compose" in str(args.get("content", "")).lower()):
-                    sanitized_content, stripped = sanitize_compose_guardrails(args.get("content", ""))
-                    args["content"] = sanitized_content
+                if tool_name == "write_file":
+                    fname = args.get("file_path", "").lower()
+                    raw_c = args.get("content", "")
+                    if "dockerfile" in fname:
+                        args["content"] = sanitize_dockerfile_guardrails(raw_c)
+                    elif "compose" in fname or "docker-compose" in str(raw_c).lower():
+                        sanitized_content, stripped = sanitize_compose_guardrails(raw_c)
+                        args["content"] = sanitized_content
                 tc = ToolCall(
                     id=tool_id,
                     tool_name=tool_name,
@@ -428,6 +435,14 @@ class SessionManager:
 
         tc.status = ToolCallStatus.APPROVED
         args = modified_arguments or tc.arguments
+        if tc.tool_name == "write_file":
+            fname = args.get("file_path", "").lower()
+            raw_c = args.get("content", "")
+            if "dockerfile" in fname:
+                args["content"] = sanitize_dockerfile_guardrails(raw_c)
+            elif "compose" in fname or "docker-compose" in str(raw_c).lower():
+                sanitized_content, stripped = sanitize_compose_guardrails(raw_c)
+                args["content"] = sanitized_content
         result = execute_approved_tool(tc.tool_name, args, session.repo_path)
 
         tc.output = str(result.get("stdout") or result.get("message") or "")
