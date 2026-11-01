@@ -54,6 +54,13 @@ class BedrockClient:
         if stage_prompt:
             kwargs["system"] = [{"text": stage_prompt}]
 
+        if settings.BEDROCK_GUARDRAIL_ID:
+            kwargs["guardrailConfig"] = {
+                "guardrailIdentifier": settings.BEDROCK_GUARDRAIL_ID,
+                "guardrailVersion": settings.BEDROCK_GUARDRAIL_VERSION,
+                "trace": "enabled"
+            }
+
         if tools:
             tool_cfg = {
                 "tools": [

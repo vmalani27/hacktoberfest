@@ -15,7 +15,7 @@ from app.models.schemas import (
     SetupStatusResponse
 )
 from app.state_machine import session_manager
-from app.guardrails import validate_git_url, check_prompt_injection
+from app.guardrails import validate_git_url
 
 router = APIRouter(prefix="/api/session", tags=["Session"])
 
@@ -76,16 +76,7 @@ async def send_user_message(session_id: str, req: UserMessageRequest):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    # Security Guardrail: Block prompt injection / jailbreak attempts
-    is_inj, reason = check_prompt_injection(req.message)
-    if is_inj:
-        session.messages.append(ChatMessage(role="user", content=req.message))
-        session.messages.append(ChatMessage(
-            role="assistant",
-            content="🛡️ **Security Guardrail Active**: Instruction override / prompt injection attempt blocked. I am strictly constrained to containerizing and deploying this repository. Please guide the container configuration or approve pending cards."
-        ))
-        return session
-
+    # Message recorded; prompt injection and topic boundaries handled natively by Bedrock Guardrail
     session.messages.append(ChatMessage(role="user", content=req.message))
     if session.stage == StageEnum.INTERVIEW:
         session.stage = StageEnum.EXECUTE
