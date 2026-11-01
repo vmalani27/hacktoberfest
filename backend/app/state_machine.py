@@ -240,12 +240,12 @@ class SessionManager:
 
         if not profile.paas_compatible:
             summary_msg += (
-                f"\n⚠️ **Critical Host Requirements Identified**:\n"
+                f"\n**Critical Host Requirements Identified**:\n"
                 + "\n".join([f"- {b}" for b in profile.paas_blockers])
-                + "\n\n🚫 **Platform Feasibility Warning**: Standard PaaS providers (Render, Vercel, Railway Standard) **cannot** run this application because they disallow host Docker daemon access (`/var/run/docker.sock`) and privileged execution (`--privileged`). Deploying to PaaS will crash at runtime."
+                + "\n\n**Platform Feasibility Warning**: Standard PaaS providers (Render, Vercel, Railway Standard) **cannot** run this application because they disallow host Docker daemon access (`/var/run/docker.sock`) and privileged execution (`--privileged`). Deploying to PaaS will crash at runtime."
             )
         else:
-            summary_msg += "\n✅ **Platform Feasibility**: Compatible with standard PaaS (Render / Railway / Vercel), Cloud IaaS, or Self-Managed VPS."
+            summary_msg += "\n**Platform Feasibility**: Compatible with standard PaaS (Render / Railway / Vercel), Cloud IaaS, or Self-Managed VPS."
 
         summary_msg += "\n\nI have provisioned an isolated container sandbox for testing your build."
 
@@ -513,7 +513,7 @@ class SessionManager:
             ))
             session.messages.append(ChatMessage(
                 role="assistant",
-                content=f"✅ Created `{fname}`! Stored securely in your workspace sandbox."
+                content=f"Created `{fname}`. Stored securely in your workspace sandbox."
             ))
             session.current_tool_call = None
             if "dockerfile" in fname.lower():
@@ -534,7 +534,7 @@ class SessionManager:
                 ))
                 session.messages.append(ChatMessage(
                     role="assistant",
-                    content="🎉 Verified command executed successfully inside the sandbox container!"
+                    content="Verified command executed successfully inside the sandbox container."
                 ))
                 next_prompt = f"Command `{args.get('command')}` executed successfully with exit code 0. Now verify the service or transition to EXPORT."
                 session.stage = StageEnum.VERIFY
@@ -550,13 +550,13 @@ class SessionManager:
                     session.stage = StageEnum.FAILED
                     session.messages.append(ChatMessage(
                         role="assistant",
-                        content=f"🛑 **Application Code Error Detected (Stop Rule)**:\n\n```\n{tc.error}\n```\nThis error originates from application logic rather than container configuration. Please fix this in your repository."
+                        content=f"**Application Code Error Detected (Stop Rule)**:\n\n```\n{tc.error}\n```\nThis error originates from application logic rather than container configuration. Please fix this in your repository."
                     ))
                 else:
                     session.retry_count += 1
                     session.messages.append(ChatMessage(
                         role="assistant",
-                        content=f"⚠️ Command returned an error (attempt {session.retry_count}/{settings.MAX_RETRY_LIMIT}):\n```\n{tc.error or 'Failed'}\n```"
+                        content=f"Command returned an error (attempt {session.retry_count}/{settings.MAX_RETRY_LIMIT}):\n```\n{tc.error or 'Failed'}\n```"
                     ))
 
         session.current_tool_call = None
@@ -588,7 +588,7 @@ class SessionManager:
         while session.retry_count <= settings.MAX_RETRY_LIMIT:
             session.messages.append(ChatMessage(
                 role="assistant",
-                content=f"🚀 **Building image `{image_tag}` in sandbox container** to verify Dockerfile..."
+                content=f"**Building image `{image_tag}` in sandbox container** to verify Dockerfile..."
             ))
             
             res = docker_bridge.execute_command(build_cmd, working_dir=session.repo_path)
@@ -599,9 +599,9 @@ class SessionManager:
                     fact=f"Docker image '{image_tag}' built successfully in sandbox",
                     evidence=f"Exit code 0 ({res.get('duration_ms', 0)}ms)"
                 ))
-                success_text = f"🎉 **Sandbox Build Succeeded!** Image `{image_tag}` built cleanly with exit code 0 ({res.get('duration_ms', 0)}ms)."
+                success_text = f"**Sandbox Build Succeeded!** Image `{image_tag}` built cleanly with exit code 0 ({res.get('duration_ms', 0)}ms)."
                 if session.retry_count > 0:
-                    success_text = f"🎉 **Self-Healing Succeeded!** Image `{image_tag}` verified in sandbox after {session.retry_count} fix(es)."
+                    success_text = f"**Self-Healing Succeeded!** Image `{image_tag}` verified in sandbox after {session.retry_count} fix(es)."
                 session.messages.append(ChatMessage(role="assistant", content=success_text))
                 session.retry_count = 0
 
@@ -621,7 +621,7 @@ class SessionManager:
                 session.current_tool_call = None
                 session.messages.append(ChatMessage(
                     role="assistant",
-                    content=f"🛑 **Application Code Error Detected (Stop Rule)**:\n\n```\n{truncate_output(err, 1500)}\n```\nThis failure is caused by an error in the application source code rather than container configuration. Please fix this in your repository."
+                    content=f"**Application Code Error Detected (Stop Rule)**:\n\n```\n{truncate_output(err, 1500)}\n```\nThis failure is caused by an error in the application source code rather than container configuration. Please fix this in your repository."
                 ))
                 return session
 
@@ -631,7 +631,7 @@ class SessionManager:
                 session.current_tool_call = None
                 session.messages.append(ChatMessage(
                     role="assistant",
-                    content=f"❌ **Sandbox build failed after {settings.MAX_RETRY_LIMIT} self-healing attempts**.\n\nBuild error logs:\n```\n{truncate_output(err, 1500)}\n```\nPlease review repository dependencies or base configuration."
+                    content=f"**Sandbox build failed after {settings.MAX_RETRY_LIMIT} self-healing attempts**.\n\nBuild error logs:\n```\n{truncate_output(err, 1500)}\n```\nPlease review repository dependencies or base configuration."
                 ))
                 return session
 
@@ -639,9 +639,9 @@ class SessionManager:
             session.messages.append(ChatMessage(
                 role="assistant",
                 content=(
-                    f"⚠️ **Sandbox build failed (Self-healing attempt {session.retry_count}/{settings.MAX_RETRY_LIMIT})**:\n"
+                    f"**Sandbox build failed (Self-healing attempt {session.retry_count}/{settings.MAX_RETRY_LIMIT})**:\n"
                     f"```\n{truncate_output(err, 800)}\n```\n"
-                    f"🔧 **AI Self-Healing**: Diagnosing build failure, updating `{norm_path}`, and re-testing inside the sandbox..."
+                    f"**AI Self-Healing**: Diagnosing build failure, updating `{norm_path}`, and re-testing inside the sandbox..."
                 )
             ))
 
@@ -719,7 +719,7 @@ class SessionManager:
 
         session.messages.append(ChatMessage(
             role="assistant",
-            content=f"🚀 **Starting services with `docker compose` in sandbox container** to verify orchestration..."
+            content=f"**Starting services with `docker compose` in sandbox container** to verify orchestration..."
         ))
 
         res = docker_bridge.execute_command(compose_cmd, working_dir=session.repo_path)
@@ -756,7 +756,7 @@ class SessionManager:
             session.messages.append(ChatMessage(
                 role="assistant",
                 content=(
-                    f"🎉 **All Services Verified and Running in Sandbox!**\n\n"
+                    f"**All Services Verified and Running in Sandbox!**\n\n"
                     f"- **Service Port**: `{port}`\n"
                     f"- **Status**: Verified running in isolated container.\n\n"
                     f"Your deployment package (`Dockerfile`, `docker-compose.yml`, `.env.example`, and `PLAYBOOK.md`) is ready for download."
@@ -775,7 +775,7 @@ class SessionManager:
             err = res.get("stderr") or res.get("stdout") or "Compose startup failure"
             session.messages.append(ChatMessage(
                 role="assistant",
-                content=f"⚠️ **Compose startup error**:\n```\n{truncate_output(err, 800)}\n```"
+                content=f"**Compose startup error**:\n```\n{truncate_output(err, 800)}\n```"
             ))
             session.stage = StageEnum.FAILED
             session.current_tool_call = None

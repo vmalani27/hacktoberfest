@@ -357,8 +357,8 @@ class CodebaseReconnaissance:
             ]
             consultation_question = (
                 f"I analyzed **{repo_name}**: it is a **{headline}**.\n\n"
-                f"⚠️ **Critical Host Requirement**: This application requires direct access to a host Docker daemon (`/var/run/docker.sock`) or privileged container execution.\n\n"
-                f"🚫 **PaaS Incompatibility**: Platforms like Vercel, Render, or Railway Standard **cannot** run this application because they disallow host Docker socket mounts.\n\n"
+                f"**Critical Host Requirement**: This application requires direct access to a host Docker daemon (`/var/run/docker.sock`) or privileged container execution.\n\n"
+                f"**PaaS Incompatibility**: Platforms like Vercel, Render, or Railway Standard **cannot** run this application because they disallow host Docker socket mounts.\n\n"
                 f"Where would you like to deploy this infrastructure?"
             )
             consultation_options = [
