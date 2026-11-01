@@ -5,7 +5,7 @@
     "topicsConfig": [
       {
         "name": "NonDevOpsTopics",
-        "definition": "Any user query, conversational request, or task that is not directly related to software deployment, containerization (Docker, Podman, Kubernetes), cloud infrastructure (AWS, Linux systems), CI/CD pipelines, application runtime configuration, networking, or build debugging. This includes all general knowledge, trivia, creative writing, math, science, personal chat, philosophy, or unrelated code tasks.",
+        "definition": "Queries or tasks not related to software deployment, containerization, cloud infrastructure, CI/CD, or build debugging. Includes general trivia, creative writing, or non-DevOps chat.",
         "examples": [
           "What is the capital of France?",
           "Can you write a poem about the ocean?",
