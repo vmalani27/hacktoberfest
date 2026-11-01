@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # Amazon Bedrock Configuration
     AWS_REGION: str = os.getenv("AWS_REGION", "ap-south-1")
-    BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "apac.amazon.nova-pro-v1:0")
+    BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "google.gemma-3-4b-it")
 
     # OpenAI-Compatible Configuration (Google AI Studio, OpenAI, etc.)
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", os.getenv("GROQ_API_KEY", os.getenv("GEMINI_API_KEY", "")))

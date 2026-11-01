@@ -55,7 +55,7 @@ class BedrockClient:
             kwargs["system"] = [{"text": stage_prompt}]
 
         if tools:
-            kwargs["toolConfig"] = {
+            tool_cfg = {
                 "tools": [
                     {
                         "toolSpec": {
@@ -67,6 +67,9 @@ class BedrockClient:
                     for t in tools
                 ]
             }
+            if "gemma" in self.model_id.lower():
+                tool_cfg["toolChoice"] = {"any": {}}
+            kwargs["toolConfig"] = tool_cfg
 
         response = self.client.converse(**kwargs)
         output_msg = response.get("output", {}).get("message", {})
