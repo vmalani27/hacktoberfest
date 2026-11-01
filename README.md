@@ -56,9 +56,7 @@ Enforces a strict **DevOps-only domain boundary** and blocks prompt injections, 
           "Can you write a poem about the ocean?",
           "Who was the first president of the United States?",
           "Help me solve this calculus problem",
-          "What is the best recipe for chocolate cake?",
-          "How do I invest in the stock market?",
-          "Write a python script to play tic-tac-toe"
+          "What is the best recipe for chocolate cake?"
         ],
         "type": "DENY",
         "inputAction": "BLOCK",
