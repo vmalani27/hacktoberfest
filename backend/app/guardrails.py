@@ -117,7 +117,9 @@ def validate_git_url(url: str) -> Tuple[bool, str, Optional[str]]:
 
     # Recognizable repo check
     netloc = parsed.netloc.lower()
-    path = parsed.path.strip("/").rstrip(".git")
+    path = parsed.path.strip("/")
+    if path.endswith(".git"):
+        path = path[:-4]
     if not netloc or not path or len(path.split("/")) < 2:
         return (
             False,

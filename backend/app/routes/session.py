@@ -122,6 +122,11 @@ async def submit_answer(session_id: str, ans: InterviewAnswer):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     session.answers[ans.question_id] = ans.answer
+    session.facts_ledger.append(LedgerEntry(
+        category="user_preference",
+        fact=f"Deployment target chosen: {ans.answer}",
+        evidence="consultation response"
+    ))
     contextual_msg = (
         f"Developer selected deployment target: '{ans.answer}'. "
         f"Synthesize the deployment architecture for this chosen target and proceed to prepare the deployment plan."

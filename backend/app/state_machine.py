@@ -28,6 +28,7 @@ from app.tools import execute_readonly_tool, execute_approved_tool, TOOL_DEFINIT
 from app.llm_client import llm_client
 from app.docker_bridge import docker_bridge
 from app.config import settings
+from app.reconnaissance import reconnaissance_engine, ArchitectureProfile
 
 STAGE_PROMPTS = {
     StageEnum.INSPECT: (
@@ -100,90 +101,13 @@ class SessionManager:
 
     def _detect_stack(self, repo_path: str) -> Tuple[str, Optional[int]]:
         """
-        Deep recursive scan (up to 2 levels deep) to identify single-service and multi-service monorepos.
+        Deep recursive codebase reconnaissance and platform feasibility analysis.
         """
-        discovered = {}
         if not os.path.exists(repo_path):
             return "Generic Application", 8000
-
-        for root, dirs, files in os.walk(repo_path):
-            rel = os.path.relpath(root, repo_path)
-            depth = len(rel.split(os.sep)) if rel != "." else 0
-            if depth > 2:
-                continue
-            if ".git" in dirs: dirs.remove(".git")
-            if "node_modules" in dirs: dirs.remove("node_modules")
-            if "venv" in dirs: dirs.remove("venv")
-
-            # Check Node.js
-            if "package.json" in files:
-                try:
-                    with open(os.path.join(root, "package.json"), "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-                    framework = "Node.js"
-                    port = 3000
-                    if "express" in deps: framework = "Node.js (Express)"
-                    elif "next" in deps: framework = "Next.js"
-                    elif "react" in deps or "react-dom" in deps: framework = "React (Vite)"
-                    elif "vue" in deps: framework = "Vue.js"
-                    discovered[rel] = {"type": "node", "framework": framework, "port": port}
-                except Exception:
-                    discovered[rel] = {"type": "node", "framework": "Node.js", "port": 3000}
-
-            # Check Python
-            if "requirements.txt" in files or "pyproject.toml" in files:
-                content = ""
-                for req_f in ["requirements.txt", "pyproject.toml"]:
-                    p = os.path.join(root, req_f)
-                    if os.path.exists(p):
-                        try:
-                            with open(p, "r", encoding="utf-8") as f: content += f.read().lower()
-                        except Exception: pass
-                framework = "Python"
-                port = 8000
-                if "fastapi" in content: framework = "Python (FastAPI)"
-                elif "flask" in content: framework = "Python (Flask)"; port = 5000
-                elif "django" in content: framework = "Python (Django)"
-                discovered[rel] = {"type": "python", "framework": framework, "port": port}
-
-            # Check Go
-            if "go.mod" in files:
-                discovered[rel] = {"type": "go", "framework": "Go Service", "port": 8080}
-
-            # Check Rust
-            if "Cargo.toml" in files:
-                discovered[rel] = {"type": "rust", "framework": "Rust Service", "port": 8080}
-
-        # Scan discovered directories for explicit entrypoint port definitions
-        for rel_dir, info in discovered.items():
-            scan_dir = repo_path if rel_dir == "." else os.path.join(repo_path, rel_dir)
-            for entry_file in ["server.js", "app.js", "index.js", "main.js", "server.py", "app.py", "main.py"]:
-                ep = os.path.join(scan_dir, entry_file)
-                if os.path.exists(ep):
-                    try:
-                        with open(ep, "r", encoding="utf-8", errors="replace") as ef:
-                            txt = ef.read()
-                        pm = re.search(r'(?:PORT\s*=\s*(?:process\.env\.PORT\s*\|\|\s*)?|listen\s*\(\s*|port\s*=\s*)(\d{3,5})', txt, re.IGNORECASE)
-                        if pm:
-                            cand = int(pm.group(1))
-                            if 80 <= cand <= 65535:
-                                info["port"] = cand
-                                break
-                    except Exception:
-                        pass
-
-        if not discovered:
-            return "Generic Application", 8000
-
-        # Monorepo / Multi-service check
-        frameworks = list(dict.fromkeys(s["framework"] for s in discovered.values()))
-        if len(discovered) > 1 or len(frameworks) > 1:
-            fw_label = " + ".join(frameworks[:2])
-            return f"Full-Stack Monorepo ({fw_label})", 3000
-
-        first_s = list(discovered.values())[0]
-        return first_s["framework"], first_s["port"]
+        profile = reconnaissance_engine.analyze_repository(repo_path)
+        port = profile.components[0].ports[0] if (profile.components and profile.components[0].ports) else 8000
+        return profile.headline, port
 
     async def initialize_workspace(
         self,
@@ -258,7 +182,8 @@ class SessionManager:
             repo_name = os.path.basename(local_path.rstrip("/\\")) or "sample-app"
             target_dir = os.path.join(settings.WORKSPACE_DIR, repo_name)
             os.makedirs(target_dir, exist_ok=True)
-            shutil.copytree(local_path, target_dir, dirs_exist_ok=True)
+            if os.path.abspath(local_path) != os.path.abspath(target_dir):
+                shutil.copytree(local_path, target_dir, dirs_exist_ok=True)
             steps[1].status = "completed"
             steps[1].detail = f"Loaded sample repository into {target_dir}."
         else:
@@ -284,12 +209,14 @@ class SessionManager:
         # Step 4: Codebase Reconnaissance & Stack Discovery
         steps[3].label = "Analyzing codebase architecture…"
         steps[3].status = "running"
-        steps[3].detail = "Scanning project layout, subdirectories, package manifests, and server entrypoints."
+        steps[3].detail = "Scanning runtime topology, host socket requirements, platform feasibility, and services."
 
-        detected_stack, detected_port = self._detect_stack(target_dir)
+        profile = reconnaissance_engine.analyze_repository(target_dir)
+        detected_stack = profile.headline
+        detected_port = profile.components[0].ports[0] if (profile.components and profile.components[0].ports) else 8000
 
         steps[3].status = "completed"
-        steps[3].detail = f"Identified {detected_stack} (port {detected_port})."
+        steps[3].detail = f"Identified {detected_stack} (primary port {detected_port})."
         status_resp.detected_stack = detected_stack
 
         # Step 5: Ready Hand-off
@@ -300,21 +227,41 @@ class SessionManager:
 
         summary_msg = (
             f"I have inspected **{repo_name}** and mapped its codebase architecture:\n\n"
-            f"- **Stack**: **{detected_stack}**\n"
-            f"- **Discovered Port**: `{detected_port}`\n\n"
-            f"I have provisioned an isolated container sandbox for testing your build."
+            f"- **Stack**: **{profile.headline}**\n"
+            f"- **Architecture**: {profile.project_summary}\n"
         )
+        if profile.components:
+            comp_list = []
+            for c in profile.components:
+                dep_info = f" (requires: {', '.join(c.host_dependencies)})" if c.host_dependencies else ""
+                port_str = f"port `{c.ports[0]}`" if c.ports else "internal utility"
+                comp_list.append(f"  - **{c.name}** (`{c.path}`): {c.runtime} on {port_str}{dep_info}")
+            summary_msg += "\n**Discovered Services & Components:**\n" + "\n".join(comp_list) + "\n"
 
-        question_text = (
-            f"I analyzed your codebase: it is a **{detected_stack}** (service port `{detected_port}`). "
-            f"Before generating deployment configurations, where do you plan to deploy this application?"
-        )
-        options = [
-            "Cloud IaaS (AWS ECS / GCP Cloud Run / Azure)",
-            "PaaS (Render / Railway / Fly.io)",
-            "Self-Managed VPS (Docker Compose + Nginx/Caddy)",
-            "Local Staging Sandbox"
+        if not profile.paas_compatible:
+            summary_msg += (
+                f"\n⚠️ **Critical Host Requirements Identified**:\n"
+                + "\n".join([f"- {b}" for b in profile.paas_blockers])
+                + "\n\n🚫 **Platform Feasibility Warning**: Standard PaaS providers (Render, Vercel, Railway Standard) **cannot** run this application because they disallow host Docker daemon access (`/var/run/docker.sock`) and privileged execution (`--privileged`). Deploying to PaaS will crash at runtime."
+            )
+        else:
+            summary_msg += "\n✅ **Platform Feasibility**: Compatible with standard PaaS (Render / Railway / Vercel), Cloud IaaS, or Self-Managed VPS."
+
+        summary_msg += "\n\nI have provisioned an isolated container sandbox for testing your build."
+
+        question_text = profile.consultation_question
+        options = profile.consultation_options
+
+        facts = [
+            LedgerEntry(category="declared", fact=f"Framework stack: {profile.headline}", evidence=os.path.basename(target_dir)),
+            LedgerEntry(category="declared", fact=f"Configured service port: {detected_port}", evidence="manifest analysis"),
+            LedgerEntry(category="verified", fact=f"Quarantine scan: {len(quarantined)} secret file(s) isolated", evidence="safety scanner"),
         ]
+        if profile.paas_blockers:
+            for blocker in profile.paas_blockers:
+                facts.append(LedgerEntry(category="verified", fact=f"Host constraint: {blocker}", evidence="reconnaissance scan"))
+        if not profile.paas_compatible:
+            facts.append(LedgerEntry(category="verified", fact="PaaS feasibility: INCOMPATIBLE (Host Docker socket or privileged mode required)", evidence="reconnaissance scan"))
 
         session = SessionState(
             session_id=session_id,
@@ -325,11 +272,7 @@ class SessionManager:
             quarantined_secrets=quarantined,
             app_type=detected_stack,
             app_port=detected_port,
-            facts_ledger=[
-                LedgerEntry(category="declared", fact=f"Framework stack: {detected_stack}", evidence=os.path.basename(target_dir)),
-                LedgerEntry(category="declared", fact=f"Configured service port: {detected_port}", evidence="manifest analysis"),
-                LedgerEntry(category="verified", fact=f"Quarantine scan: {len(quarantined)} secret file(s) isolated", evidence="safety scanner"),
-            ],
+            facts_ledger=facts,
             messages=[
                 ChatMessage(role="assistant", content=summary_msg)
             ],
@@ -439,12 +382,12 @@ class SessionManager:
                 summary = args.get("summary") or ""
                 deps = args.get("detected_dependencies") or []
 
+                profile = reconnaissance_engine.analyze_repository(session.repo_path)
                 if not fw or fw.lower() in ("unknown", "generic application", "generic", "application service"):
-                    fallback_fw, fallback_port = self._detect_stack(session.repo_path)
-                    fw = fallback_fw
-                    port = args.get("port") or fallback_port
+                    fw = profile.headline
+                    port = profile.components[0].ports[0] if (profile.components and profile.components[0].ports) else 8000
                 else:
-                    port = args.get("port") or 8000
+                    port = args.get("port") or (profile.components[0].ports[0] if (profile.components and profile.components[0].ports) else 8000)
 
                 session.detected_stack = fw
                 session.app_port = port
@@ -455,11 +398,18 @@ class SessionManager:
                     fact=f"AI Codebase Profile: {fw} ({arch})",
                     evidence=f"Port {port}"
                 ))
-                if deps:
+                if profile.paas_blockers:
+                    for blocker in profile.paas_blockers:
+                        session.facts_ledger.append(LedgerEntry(
+                            category="verified",
+                            fact=f"Host constraint: {blocker}",
+                            evidence="reconnaissance scan"
+                        ))
+                if not profile.paas_compatible:
                     session.facts_ledger.append(LedgerEntry(
                         category="verified",
-                        fact=f"Detected external dependencies: {', '.join(deps)}",
-                        evidence="manifest inspection"
+                        fact="PaaS feasibility: INCOMPATIBLE (Host Docker socket or privileged mode required)",
+                        evidence="reconnaissance scan"
                     ))
 
                 # Update setup status if active
@@ -470,32 +420,10 @@ class SessionManager:
                         status_resp.steps[3].status = "completed"
                         status_resp.steps[3].detail = f"AI identified {fw} (port {port})."
                         status_resp.steps[4].label = f"Ready. {fw}"
-                        status_resp.steps[4].detail = summary or f"Architecture: {arch}."
+                        status_resp.steps[4].detail = summary or profile.project_summary
 
-                # Construct dynamic DevOps Infrastructure Consultation question
-                dep_note = f" (detected {', '.join(deps)})" if deps else ""
-                if "monorepo" in arch.lower() or "multi" in arch.lower() or "microservice" in arch.lower():
-                    question_text = (
-                        f"I analyzed your codebase: it is a {fw} ({arch}){dep_note}. "
-                        f"Before generating deployment configurations, where do you plan to deploy this stack?"
-                    )
-                    options = [
-                        "Cloud IaaS (AWS ECS / GCP Cloud Run / Azure)",
-                        "PaaS (Render / Railway / Fly.io)",
-                        "Self-Managed VPS (Docker Compose + Reverse Proxy)",
-                        "Local Staging Sandbox"
-                    ]
-                else:
-                    question_text = (
-                        f"I analyzed your codebase: it is a {fw} configured on port {port}{dep_note}. "
-                        f"Where do you plan to deploy this application?"
-                    )
-                    options = [
-                        "Cloud IaaS (AWS ECS / GCP Cloud Run / Azure)",
-                        "PaaS (Render / Railway / Fly.io)",
-                        "Self-Managed VPS (Docker Compose + Nginx/Caddy)",
-                        "Local Staging Sandbox"
-                    ]
+                question_text = profile.consultation_question
+                options = profile.consultation_options
 
                 session.stage = StageEnum.INTERVIEW
                 session.current_tool_call = ToolCall(
@@ -590,7 +518,7 @@ class SessionManager:
             session.current_tool_call = None
             if "dockerfile" in fname.lower():
                 session.stage = StageEnum.EXECUTE
-                return await self._verify_and_self_heal_dockerfile(session)
+                return await self._verify_and_self_heal_dockerfile(session, file_path=fname)
             elif "compose" in fname.lower():
                 session.stage = StageEnum.EXECUTE
                 return await self._verify_and_self_heal_compose(session)
@@ -635,10 +563,10 @@ class SessionManager:
         return await self.step(session_id, extra_instruction=next_prompt if "next_prompt" in locals() else None)
 
 
-    async def _verify_and_self_heal_dockerfile(self, session: SessionState) -> SessionState:
+    async def _verify_and_self_heal_dockerfile(self, session: SessionState, file_path: str = "Dockerfile") -> SessionState:
         """
         Autonomous AI Sandbox Build & Self-Healing Loop:
-        1. Executes `docker build -t <repo_name>:test .` inside the DinD sandbox container.
+        1. Executes `docker build -t <tag> -f <file_path> <context>` inside the DinD sandbox container.
         2. If exit_code == 0: records verified evidence, informs user, and proceeds to docker-compose.yml.
         3. If exit_code != 0:
            - If fatal application syntax/code bug: Stop Rule halts.
@@ -646,8 +574,16 @@ class SessionManager:
         """
         repo_name = os.path.basename(session.repo_path.rstrip("/\\")) or "app"
         clean_tag = re.sub(r'[^a-zA-Z0-9_\-\.]', '', repo_name.lower()) or "app"
-        image_tag = f"{clean_tag}:test"
-        build_cmd = f"docker build -t {image_tag} ."
+
+        norm_path = file_path.replace("\\", "/").lstrip("./")
+        if "/" in norm_path:
+            context_dir = os.path.dirname(norm_path)
+            sub_name = os.path.basename(context_dir)
+            image_tag = f"{clean_tag}-{sub_name}:test"
+            build_cmd = f"docker build -t {image_tag} -f {norm_path} {context_dir}"
+        else:
+            image_tag = f"{clean_tag}:test"
+            build_cmd = f"docker build -t {image_tag} -f {norm_path} ."
 
         while session.retry_count <= settings.MAX_RETRY_LIMIT:
             session.messages.append(ChatMessage(
@@ -671,7 +607,7 @@ class SessionManager:
 
                 # Proceed to compose generation
                 next_prompt = (
-                    f"The Dockerfile for '{repo_name}' has been built and verified inside the sandbox container (exit code 0).\n"
+                    f"The Dockerfile `{norm_path}` has been built and verified inside the sandbox container (exit code 0).\n"
                     f"Now generate `docker-compose.yml` (and `.env.example` if required) by calling the `write_file` tool call.\n"
                     f"MANDATORY GUARDRAILS: ZERO host mounts (never write 'volumes: - .:/app' or relative binds). Use the verified image or build context."
                 )
@@ -705,25 +641,25 @@ class SessionManager:
                 content=(
                     f"⚠️ **Sandbox build failed (Self-healing attempt {session.retry_count}/{settings.MAX_RETRY_LIMIT})**:\n"
                     f"```\n{truncate_output(err, 800)}\n```\n"
-                    f"🔧 **AI Self-Healing**: Diagnosing build failure, updating `Dockerfile`, and re-testing inside the sandbox..."
+                    f"🔧 **AI Self-Healing**: Diagnosing build failure, updating `{norm_path}`, and re-testing inside the sandbox..."
                 )
             ))
 
-            dockerfile_path = os.path.join(session.repo_path, "Dockerfile")
+            target_dockerfile_path = os.path.join(session.repo_path, norm_path)
             current_df = ""
-            if os.path.exists(dockerfile_path):
+            if os.path.exists(target_dockerfile_path):
                 try:
-                    with open(dockerfile_path, "r", encoding="utf-8", errors="replace") as f:
+                    with open(target_dockerfile_path, "r", encoding="utf-8", errors="replace") as f:
                         current_df = f.read()
                 except Exception:
                     pass
 
             healing_instruction = (
-                f"CRITICAL: The sandbox `docker build` for {repo_name} failed with exit code {res.get('exit_code')}.\n"
-                f"Current Dockerfile:\n```dockerfile\n{current_df}\n```\n\n"
+                f"CRITICAL: The sandbox `docker build` for {image_tag} failed with exit code {res.get('exit_code')}.\n"
+                f"Current Dockerfile (`{norm_path}`):\n```dockerfile\n{current_df}\n```\n\n"
                 f"Build Error Stderr:\n```\n{truncate_output(err, 1500)}\n```\n\n"
                 f"Diagnose the error above. Fix the Dockerfile (e.g. adjust base image version, install required build packages/compilers, fix COPY paths, or correct command syntax). "
-                f"MANDATORY: You MUST call the `write_file` tool with file_path='Dockerfile' and the complete corrected content."
+                f"MANDATORY: You MUST call the `write_file` tool with file_path='{norm_path}' and the complete corrected content."
             )
 
             # Query LLM with sliding window history + healing instruction
@@ -755,9 +691,9 @@ class SessionManager:
                         break
 
             if fixed_content:
-                with open(dockerfile_path, "w", encoding="utf-8") as f:
+                with open(target_dockerfile_path, "w", encoding="utf-8") as f:
                     f.write(fixed_content)
-                session.exported_artifacts["Dockerfile"] = fixed_content
+                session.exported_artifacts[norm_path] = fixed_content
                 # Loop continues to re-test docker build!
             else:
                 session.stage = StageEnum.FAILED
