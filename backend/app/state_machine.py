@@ -31,43 +31,48 @@ from app.config import settings
 
 STAGE_PROMPTS = {
     StageEnum.INSPECT: (
-        "You are an expert autonomous DevOps architect.\n"
+        "You are an expert autonomous DevOps & Cloud Infrastructure Architect.\n"
         "A codebase has been loaded into your ephemeral workspace sandbox.\n"
-        "DO NOT GUESS OR ASSUME. You MUST inspect the codebase thoroughly before making decisions:\n"
-        "1. Call `list_dir` to explore the root directory structure.\n"
-        "2. If you see subdirectories like `backend`, `frontend`, `services`, `api`, `client`, `web`, inspect them with `list_dir` and read their respective manifests (`package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml`, `Gemfile`, `go.mod`, etc.) using `read_file`.\n"
-        "3. Read server entrypoints (e.g. server.js, main.py, app.py, vite.config.ts) to find ports, framework versions, and routes.\n"
-        "4. Call `declare_stack_profile` to register your findings (framework, port, architecture, dependencies, summary).\n"
-        "5. If the repository is a monorepo or has multiple services, call `ask_user` with tailored options on how the developer wants to containerize the architecture (e.g. multi-service compose, backend only, or unified container).\n"
-        "6. If the repository is a single-service app with clear requirements, explain your analysis and propose the Dockerfile via `write_file`."
+        "DevOps is NOT just containerization; it is end-to-end deployment engineering (Target Cloud/Platform, CI/CD, IaC, and Container Packaging).\n\n"
+        "STEP 1: CODEBASE RECONNAISSANCE\n"
+        "- Call `list_dir` to inspect the project layout.\n"
+        "- Inspect subdirectories (`backend`, `frontend`, `services`, `api`) and manifests (`package.json`, `requirements.txt`, `pyproject.toml`, `Cargo.toml`, `Gemfile`, `go.mod`, etc.) with `read_file`.\n"
+        "- Read server entrypoints (server.js, main.py, etc.) to discover ports and routes.\n"
+        "- Call `declare_stack_profile` to record your findings.\n\n"
+        "STEP 2: DEVOPS INFRASTRUCTURE INTERVIEW\n"
+        "- DO NOT jump straight to writing a generic Dockerfile. First consult the developer by calling `ask_user`.\n"
+        "- Inquire about their target deployment destination (e.g. Cloud IaaS AWS/GCP, PaaS Render/Railway, Self-Managed VPS, or Local Staging Sandbox).\n"
+        "- If it is a monorepo or multi-service stack, inquire how they wish to package and connect the services."
     ),
     StageEnum.INTERVIEW: (
-        "You are an expert DevOps architect. "
-        "The developer has answered your architectural questions. "
-        "Synthesize the architecture and proceed immediately to creating the deployment manifests using `write_file`. "
-        "If multi-service, generate the appropriate Dockerfiles (e.g. `backend/Dockerfile`, `frontend/Dockerfile`) and `docker-compose.yml`. "
-        "CRITICAL DOCKERFILE SYNTAX: Arguments MUST have spaces! Write 'COPY package*.json ./' and 'COPY . .'. "
-        "Do NOT write code blocks in chat prose; always invoke `write_file`."
+        "You are an expert DevOps Architect consulting on cloud deployment strategy.\n"
+        "Review the developer's target infrastructure choice and requirements:\n"
+        "- If PaaS (Render / Railway / Vercel): Design the PaaS blueprint (e.g. `render.yaml`) and service Dockerfiles.\n"
+        "- If Cloud IaaS (AWS / GCP / Azure): Design the containerization setup for ECS/Cloud Run with Terraform IaC (`main.tf`) and CI/CD workflow (`.github/workflows/deploy.yml`).\n"
+        "- If Self-Managed VPS / Local Staging: Design the production `docker-compose.yml`, Dockerfiles, and reverse-proxy/environment blueprints.\n"
+        "- If the developer is unsure or asks for advice: Provide clear, expert guidance on costs, complexity, and operational trade-offs for their specific stack.\n"
+        "Once aligned, proceed to `PLAN` and propose the configuration files using `write_file`."
     ),
     StageEnum.PLAN: (
-        "You are preparing deployment artifacts for this verified architecture. "
-        "Invoke `write_file` to propose the container configuration."
+        "You are preparing deployment manifests for the developer's chosen target infrastructure.\n"
+        "MANDATORY: Invoke `write_file` to create the verified artifacts (Dockerfile(s), docker-compose.yml, IaC/PaaS config, and .env.example).\n"
+        "Do NOT write file contents in chat prose; always use `write_file`."
     ),
     StageEnum.EXECUTE: (
-        "You are creating containerization artifacts for this application.\n"
-        "MANDATORY SECURITY GUARDRAILS:\n"
-        "1. ZERO HOST MOUNTS: In `docker-compose.yml`, NEVER mount host application directories (e.g. NEVER write `volumes: - .:/app` or `.:/usr/src/app`). Code must be self-contained in the container image.\n"
+        "You are generating and testing deployment artifacts for the chosen infrastructure target.\n"
+        "MANDATORY SECURITY & TECHNICAL GUARDRAILS:\n"
+        "1. ZERO HOST MOUNTS: In `docker-compose.yml`, NEVER mount host application directories (e.g. NEVER write `volumes: - .:/app`). All code must be self-contained in container images.\n"
         "2. ZERO CHAT DELAYS: Never output 'I will write this file' in chat prose. Directly invoke the `write_file` tool call in the same turn.\n"
         "3. ZERO SECRETS: Never ask for or write real passwords or tokens. Always use `.env.example` with placeholder values."
     ),
     StageEnum.VERIFY: (
-        "Verify the running container by querying its health endpoint using `run_command` (e.g., `curl -I http://localhost:<port>`). "
-        "If it succeeds, confirm the deployment is verified. "
-        "If the user's application code has a bug (SyntaxError, missing module), quote the error verbatim and halt under the Stop Rule."
+        "Verify the running container services inside the sandbox container.\n"
+        "Query service health endpoints using `run_command` (e.g. `curl -I http://localhost:<port>`) and inspect container statuses.\n"
+        "If application source code errors occur (SyntaxError), quote verbatim and halt under the Stop Rule."
     ),
     StageEnum.EXPORT: (
-        "The deployment has been verified inside the sandbox! Congratulate the developer and inform them "
-        "that their verified artifacts (Dockerfile, compose file, .env.example, runbook) are ready for download."
+        "The deployment has been verified inside the sandbox! Congratulate the developer.\n"
+        "Deliver the complete DevOps deployment bundle: container manifests, target infrastructure config (IaC/PaaS blueprint), CI/CD pipeline, .env.example, and the verified Playbook."
     )
 }
 
@@ -451,24 +456,44 @@ class SessionManager:
                         status_resp.steps[4].label = f"Ready. {fw}"
                         status_resp.steps[4].detail = summary or f"Architecture: {arch}."
 
+                # Construct dynamic DevOps Infrastructure Consultation question
+                dep_note = f" (detected {', '.join(deps)})" if deps else ""
                 if "monorepo" in arch.lower() or "multi" in arch.lower() or "microservice" in arch.lower():
-                    next_instruction = (
-                        f"Architecture profile confirmed: {fw} ({arch}). "
-                        f"Because this codebase contains multiple services or components, you MUST now call `ask_user` "
-                        f"with a question asking the developer how they want to deploy the services "
-                        f"(e.g. 'Full-Stack Compose (frontend + backend)', 'Backend API only', 'Frontend only')."
+                    question_text = (
+                        f"I analyzed your codebase: it is a {fw} ({arch}){dep_note}. "
+                        f"Before generating deployment configurations, where do you plan to deploy this stack?"
                     )
+                    options = [
+                        "Cloud IaaS (AWS ECS / GCP Cloud Run / Azure)",
+                        "PaaS (Render / Railway / Fly.io)",
+                        "Self-Managed VPS (Docker Compose + Reverse Proxy)",
+                        "Local Staging Sandbox"
+                    ]
                 else:
-                    next_instruction = (
-                        f"Architecture profile confirmed: {fw} on port {port}. "
-                        f"Proceed immediately to propose the production containerization by calling `write_file` with file_path='Dockerfile'."
+                    question_text = (
+                        f"I analyzed your codebase: it is a {fw} configured on port {port}{dep_note}. "
+                        f"Where do you plan to deploy this application?"
                     )
+                    options = [
+                        "Cloud IaaS (AWS ECS / GCP Cloud Run / Azure)",
+                        "PaaS (Render / Railway / Fly.io)",
+                        "Self-Managed VPS (Docker Compose + Nginx/Caddy)",
+                        "Local Staging Sandbox"
+                    ]
 
-                history.append({
-                    "role": "user",
-                    "content": f"[Result of declare_stack_profile]: {next_instruction}"
-                })
-                continue
+                session.stage = StageEnum.INTERVIEW
+                session.current_tool_call = ToolCall(
+                    id=f"deploy_target_{tool_id}",
+                    tool_name="ask_user",
+                    arguments={
+                        "question_id": "deployment_target",
+                        "question": question_text,
+                        "options": options
+                    },
+                    status=ToolCallStatus.PENDING_APPROVAL,
+                    requires_approval=True
+                )
+                break
             elif tool_name in ["write_file", "run_command", "ask_user"]:
                 if tool_name == "write_file":
                     fname = args.get("file_path", "").lower()

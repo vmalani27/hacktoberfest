@@ -122,11 +122,14 @@ async def submit_answer(session_id: str, ans: InterviewAnswer):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     session.answers[ans.question_id] = ans.answer
-    contextual_msg = f"Deployment architecture requirement for {ans.question_id}: {ans.answer}. Please proceed with containerization and generate the Dockerfile using write_file."
+    contextual_msg = (
+        f"Developer selected deployment target: '{ans.answer}'. "
+        f"Synthesize the deployment architecture for this chosen target and proceed to prepare the deployment plan."
+    )
     session.messages.append(ChatMessage(role="user", content=contextual_msg))
     if session.current_tool_call and session.current_tool_call.tool_name == "ask_user":
         session.current_tool_call = None
-    session.stage = StageEnum.EXECUTE
+    session.stage = StageEnum.INTERVIEW
     return await session_manager.step(session_id)
 
 @router.get("/{session_id}/export")

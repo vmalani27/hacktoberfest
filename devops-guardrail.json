@@ -5,7 +5,7 @@
     "topicsConfig": [
       {
         "name": "NonDevOpsTopics",
-        "definition": "Queries or tasks not related to software deployment, containerization, cloud infrastructure, CI/CD, or build debugging. Includes general trivia, creative writing, or non-DevOps chat.",
+        "definition": "General knowledge trivia, geography, history, creative writing, fiction, poetry, cooking recipes, sports, casual conversational banter, or non-technical homework questions.",
         "examples": [
           "What is the capital of France?",
           "Can you write a poem about the ocean?",
