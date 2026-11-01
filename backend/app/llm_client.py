@@ -150,33 +150,42 @@ class OpenAICompatibleClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        try:
-            url = f"{self.base_url}/chat/completions"
-            async with httpx.AsyncClient(timeout=90.0) as client:
-                res = await client.post(url, json=payload, headers=headers)
-                if res.status_code == 200:
-                    data = res.json()
-                    choices = data.get("choices", [])
-                    if choices:
-                        msg = choices[0].get("message", {})
+        url = f"{self.base_url}/chat/completions"
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=90.0) as client:
+                    res = await client.post(url, json=payload, headers=headers)
+                    if res.status_code == 200:
+                        data = res.json()
+                        choices = data.get("choices", [])
+                        if choices:
+                            msg = choices[0].get("message", {})
+                            return {
+                                "role": "assistant",
+                                "content": msg.get("content", "") or "",
+                                "tool_calls": msg.get("tool_calls", [])
+                            }
+                        return {"role": "assistant", "content": "", "tool_calls": []}
+                    elif res.status_code == 429 and attempt < max_retries - 1:
+                        # Auto-retry on Groq rate limits (tokens per minute reset in 3-5 seconds)
+                        await asyncio.sleep(4.5 + (attempt * 2.0))
+                        continue
+                    else:
                         return {
                             "role": "assistant",
-                            "content": msg.get("content", "") or "",
-                            "tool_calls": msg.get("tool_calls", [])
+                            "content": f"[LLM API Error {res.status_code}]: {res.text}",
+                            "tool_calls": []
                         }
-                    return {"role": "assistant", "content": "", "tool_calls": []}
-                else:
-                    return {
-                        "role": "assistant",
-                        "content": f"[LLM API Error {res.status_code}]: {res.text}",
-                        "tool_calls": []
-                    }
-        except Exception as e:
-            return {
-                "role": "assistant",
-                "content": f"LLM error: {str(e)}",
-                "tool_calls": []
-            }
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2.0)
+                    continue
+                return {
+                    "role": "assistant",
+                    "content": f"LLM error: {str(e)}",
+                    "tool_calls": []
+                }
 
 
 class UnifiedLLMClient:
