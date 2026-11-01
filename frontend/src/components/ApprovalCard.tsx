@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileCode, Play, ChevronDown, ChevronUp, Check, Copy, CheckCheck } from 'lucide-react';
+import { ChevronDown, ChevronUp, Check, Copy, CheckCheck } from 'lucide-react';
 import { ToolCall } from '../types';
 
 interface ApprovalCardProps {
@@ -31,36 +31,31 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({
   };
 
   return (
-    <div className="my-3.5 rounded-2xl border border-indigo-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-xl shadow-black/40 overflow-hidden transition-all duration-200">
-      <div className="p-4 flex items-center justify-between border-b border-slate-800/80 bg-slate-900/40">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-inner">
-            {isWrite ? <FileCode className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+    <div className="my-3 rounded-xl border border-white/[0.08] bg-[#111318] overflow-hidden shadow-sm font-mono text-xs select-none">
+      <div className="p-3.5 flex items-center justify-between border-b border-white/[0.08] bg-[#151922]">
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-white tracking-tight">
+              {isWrite ? filePath : command}
+            </span>
+            <span className="text-[10px] font-mono border border-white/[0.08] bg-[#1e2433] px-1.5 py-0.5 rounded text-slate-300">
+              {isWrite ? 'new file' : 'sandbox command'}
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-100 tracking-tight">
-                {isWrite ? filePath : command}
-              </span>
-              <span className="text-[10px] font-mono text-indigo-400 bg-indigo-950/60 border border-indigo-800/40 px-1.5 py-0.5 rounded">
-                {isWrite ? 'new file' : 'sandbox command'}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              {isWrite
-                ? 'Review the proposed configuration before saving to workspace'
-                : 'Execute this command inside the isolated sandbox'}
-            </p>
-          </div>
+          <p className="text-[11px] text-slate-500 font-sans">
+            {isWrite
+              ? 'Review proposed container manifest before writing to workspace.'
+              : 'Requires human approval before executing inside sandbox container.'}
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
           {isWrite && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1 rounded-lg hover:bg-slate-800/60 transition"
+              className="px-2 py-1 text-xs text-slate-400 hover:text-white flex items-center gap-1 rounded hover:bg-white/[0.04] transition-colors cursor-pointer"
             >
-              <span>{expanded ? 'Collapse' : 'Preview'}</span>
+              <span>{expanded ? 'Hide' : 'View'}</span>
               {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
           )}
@@ -68,7 +63,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({
           <button
             onClick={() => onReject(toolCall.id)}
             disabled={loading}
-            className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-lg transition"
+            className="px-2.5 py-1 text-xs text-slate-400 hover:text-white hover:bg-white/[0.04] rounded transition-colors cursor-pointer disabled:opacity-50"
           >
             Skip
           </button>
@@ -76,25 +71,25 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({
           <button
             onClick={() => onApprove(toolCall.id)}
             disabled={loading}
-            className="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 active:scale-95 text-white text-xs font-medium rounded-lg shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-1.5"
+            className="px-3 py-1 bg-zinc-100 hover:bg-white text-zinc-950 font-medium rounded transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
             <Check className="w-3.5 h-3.5" />
-            <span>{isWrite ? 'Apply File' : 'Run in Sandbox'}</span>
+            <span>{isWrite ? 'Apply' : 'Run in Sandbox'}</span>
           </button>
         </div>
       </div>
 
       {isWrite && expanded && (
-        <div className="relative group bg-[#090d16] p-3.5">
+        <div className="relative group bg-[#090a0f] p-3.5 border-t border-white/[0.04]">
           <button
             onClick={handleCopy}
-            className="absolute top-3 right-3 p-1.5 rounded-md bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[11px]"
+            className="absolute top-2.5 right-2.5 px-2 py-1 rounded bg-[#181d28] hover:bg-[#202736] border border-white/[0.08] text-slate-400 hover:text-white transition-colors flex items-center gap-1 text-[10px]"
             title="Copy content"
           >
-            {copied ? <CheckCheck className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
-          <pre className="font-mono text-xs text-slate-300 max-h-56 overflow-y-auto leading-relaxed selection:bg-indigo-500/30">
+          <pre className="font-mono text-xs text-slate-300 max-h-60 overflow-y-auto leading-relaxed selection:bg-slate-700/50">
             {fileContent}
           </pre>
         </div>

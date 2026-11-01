@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { Terminal as TerminalIcon, RotateCcw, Maximize2, Minimize2, Circle, Play } from 'lucide-react';
+import { Terminal as TerminalIcon, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
 
 interface TerminalViewProps {
   sessionId: string;
@@ -26,10 +26,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId }) => {
       fontSize: 12,
       lineHeight: 1.25,
       theme: {
-        background: '#070b14',
+        background: '#090a0c',
         foreground: '#e2e8f0',
-        cursor: '#818cf8',
-        selectionBackground: 'rgba(99, 102, 241, 0.35)',
+        cursor: '#38bdf8',
+        selectionBackground: 'rgba(56, 189, 248, 0.3)',
         black: '#0f172a',
         red: '#f87171',
         green: '#4ade80',
@@ -58,7 +58,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId }) => {
 
     ws.onopen = () => {
       setConnected(true);
-      term.writeln('\x1b[32m✔ Connected to interactive container terminal.\x1b[0m\r\n');
+      term.writeln('\x1b[32m[ok] Attached to isolated container terminal.\x1b[0m\r\n');
       ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
     };
 
@@ -72,7 +72,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId }) => {
 
     ws.onclose = () => {
       setConnected(false);
-      term.writeln('\r\n\x1b[33m⚡ Terminal session disconnected.\x1b[0m');
+      term.writeln('\r\n\x1b[33m[info] Terminal disconnected.\x1b[0m');
     };
 
     ws.onerror = () => {
@@ -128,7 +128,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId }) => {
     ws.onopen = () => {
       setConnected(true);
       if (terminalRef.current) {
-        terminalRef.current.writeln('\x1b[32m✔ Reconnected.\x1b[0m\r\n');
+        terminalRef.current.writeln('\x1b[32m[ok] Reconnected.\x1b[0m\r\n');
         ws.send(JSON.stringify({
           type: 'resize',
           cols: terminalRef.current.cols,
@@ -152,39 +152,39 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId }) => {
 
   return (
     <div
-      className={`flex flex-col bg-[#070b14] border-t md:border-t-0 md:border-l border-slate-800/80 transition-all duration-300 shadow-2xl ${
+      className={`flex flex-col bg-[#090a0c] border-t md:border-t-0 md:border-l border-white/[0.08] transition-all duration-200 select-none ${
         isExpanded ? 'w-full md:w-[680px]' : 'w-full md:w-[480px]'
       }`}
     >
       {/* Terminal Title Bar */}
-      <div className="px-3.5 py-2 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md flex items-center justify-between text-xs">
+      <div className="h-11 px-3.5 border-b border-white/[0.08] bg-[#0c0e14] flex items-center justify-between font-mono text-xs">
         <div className="flex items-center gap-2">
-          <TerminalIcon className="w-3.5 h-3.5 text-indigo-400" />
-          <span className="font-medium text-slate-200">Terminal</span>
+          <TerminalIcon className="w-3.5 h-3.5 text-slate-400" />
+          <span className="font-semibold text-white">TERMINAL</span>
           <div className="flex items-center gap-1.5 text-[11px] text-slate-400 ml-1.5">
-            <Circle className={`w-2 h-2 ${connected ? 'text-emerald-400 fill-emerald-400 animate-pulse' : 'text-amber-400 fill-amber-400'}`} />
-            <span className="font-mono text-[10px]">/workspace</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+            <span className="text-[10px] text-zinc-500">/workspace</span>
           </div>
         </div>
 
         {/* Quick action buttons & window controls */}
         <div className="flex items-center gap-1.5">
-          <div className="hidden sm:flex items-center gap-1 mr-1 border-r border-slate-800 pr-2">
+          <div className="hidden sm:flex items-center gap-1 mr-1 border-r border-white/[0.08] pr-2">
             <button
               onClick={() => sendQuickCommand('ls -la')}
-              className="px-2 py-0.5 text-[10px] font-mono text-slate-400 hover:text-slate-200 bg-slate-800/70 hover:bg-slate-700/80 rounded transition active:scale-95"
+              className="px-2 py-0.5 text-[10px] text-slate-400 hover:text-white bg-[#161a24] hover:bg-[#1f2533] rounded transition-colors cursor-pointer"
             >
               ls
             </button>
             <button
               onClick={() => sendQuickCommand('docker ps')}
-              className="px-2 py-0.5 text-[10px] font-mono text-slate-400 hover:text-slate-200 bg-slate-800/70 hover:bg-slate-700/80 rounded transition active:scale-95"
+              className="px-2 py-0.5 text-[10px] text-slate-400 hover:text-white bg-[#161a24] hover:bg-[#1f2533] rounded transition-colors cursor-pointer"
             >
               docker ps
             </button>
             <button
               onClick={() => sendQuickCommand('clear')}
-              className="px-2 py-0.5 text-[10px] font-mono text-slate-400 hover:text-slate-200 bg-slate-800/70 hover:bg-slate-700/80 rounded transition active:scale-95"
+              className="px-2 py-0.5 text-[10px] text-slate-400 hover:text-white bg-[#161a24] hover:bg-[#1f2533] rounded transition-colors cursor-pointer"
             >
               clear
             </button>
@@ -193,14 +193,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ sessionId }) => {
           <button
             onClick={handleRestart}
             title="Reconnect"
-            className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition"
+            className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.04] transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             title={isExpanded ? 'Collapse width' : 'Expand width'}
-            className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition"
+            className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.04] transition-colors cursor-pointer"
           >
             {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>

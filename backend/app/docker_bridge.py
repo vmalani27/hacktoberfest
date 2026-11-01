@@ -43,13 +43,33 @@ class DockerBridge:
         start_time = time.time()
         target_container = container_name or settings.SANDBOX_CONTAINER_NAME
 
+        # Resolve working directory inside sandbox container
+        sandbox_dir = "/workspace"
+        if working_dir:
+            normalized_wd = working_dir.replace("\\", "/")
+            if normalized_wd.startswith("/workspace"):
+                sandbox_dir = normalized_wd
+            else:
+                try:
+                    rel = os.path.relpath(working_dir, settings.WORKSPACE_DIR)
+                    if not rel.startswith("..") and rel != ".":
+                        sandbox_dir = f"/workspace/{rel}".replace("\\", "/")
+                    else:
+                        base = os.path.basename(working_dir.rstrip("/\\"))
+                        if base:
+                            sandbox_dir = f"/workspace/{base}"
+                except Exception:
+                    base = os.path.basename(working_dir.rstrip("/\\"))
+                    if base:
+                        sandbox_dir = f"/workspace/{base}"
+
         # 1. Try execution inside the DinD Sandbox container
         if self.client:
             try:
                 container = self.client.containers.get(target_container)
                 exec_result = container.exec_run(
-                    cmd=["/bin/sh", "-c", f"cd /workspace && {command}"],
-                    workdir="/workspace",
+                    cmd=["/bin/sh", "-c", f"mkdir -p '{sandbox_dir}' && cd '{sandbox_dir}' && {command}"],
+                    workdir=sandbox_dir,
                     demux=True
                 )
                 duration_ms = (time.time() - start_time) * 1000

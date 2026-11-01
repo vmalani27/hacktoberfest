@@ -193,16 +193,32 @@ def truncate_output(output: str, max_length: int = 4000) -> str:
 def is_app_code_error(error_output: str) -> bool:
     """
     Detect if failure is caused by user application code error
-    (e.g., SyntaxError, ModuleNotFoundError, ImportError, TypeError)
-    versus Docker/deployment infrastructure setup.
+    (e.g. fatal Python/Node syntax errors in application source)
+    versus Docker build / container packaging setup.
+    If the error is in Dockerfile parsing or build steps, it is NOT an app code error.
     """
-    indicators = [
-        "SyntaxError:",
-        "IndentationError:",
-        "ModuleNotFoundError: No module named",
-        "ReferenceError:",
-        "TypeError:",
-        "Cannot find module",
-        "Parse error on line",
+    if not error_output:
+        return False
+
+    # Build / Docker errors are infrastructure issues that AI can self-heal
+    infra_indicators = [
+        "dockerfile parse error",
+        "failed to solve",
+        "executor failed running",
+        "returned a non-zero code",
+        "command not found",
+        "npm err!",
+        "pip: command not found",
+        "error: failed to solve",
     ]
-    return any(ind in error_output for ind in indicators)
+    lower_err = error_output.lower()
+    if any(ind in lower_err for ind in infra_indicators):
+        return False
+
+    # True application syntax / code failure
+    app_indicators = [
+        "syntaxerror:",
+        "indentationerror:",
+        "taberror:",
+    ]
+    return any(ind in lower_err for ind in app_indicators)

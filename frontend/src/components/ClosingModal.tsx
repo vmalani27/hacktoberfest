@@ -4,10 +4,8 @@ import {
   Trash2, 
   X, 
   Check, 
-  AlertCircle, 
   FileCode, 
   BookOpen, 
-  ShieldCheck, 
   RotateCcw 
 } from 'lucide-react';
 
@@ -52,89 +50,89 @@ export const ClosingModal: React.FC<ClosingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md antialiased">
-      <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-slate-100 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm select-none font-mono text-xs">
+      <div className="w-full max-w-lg bg-[#111318] border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden text-slate-100 animate-in fade-in zoom-in-95 duration-100">
         
         {!deletedConfirmed ? (
           <div>
             {/* Header */}
-            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                <Trash2 className="w-4 h-4 text-rose-400" />
-                <span>Close & Delete Workspace</span>
+            <div className="px-5 py-3.5 border-b border-white/[0.08] flex items-center justify-between bg-[#151922]">
+              <h3 className="font-semibold text-white flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-red-400" />
+                <span>Teardown & Delete Session</span>
               </h3>
               <button
                 onClick={onClose}
-                className="p-1 text-slate-400 hover:text-slate-200 transition-colors rounded-lg hover:bg-slate-800"
+                className="p-1 text-slate-400 hover:text-white transition-colors rounded hover:bg-white/[0.04] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Content Body */}
-            <div className="p-5 space-y-5">
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-slate-200">
-                  Disposable Sandbox Teardown
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              <div className="space-y-1">
+                <p className="font-semibold text-slate-200">
+                  Ephemeral Container Destruction
                 </p>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Closing this workspace permanently destroys the container environment and all temporary files. Make sure to download your generated configuration bundle and Playbook before confirming.
+                <p className="text-slate-400 font-sans leading-relaxed text-xs">
+                  Destroying this session deletes the isolated Docker container, internal volumes, and all temporary build artifacts. Download your generated Playbook bundle before continuing.
                 </p>
               </div>
 
               {/* Artifacts Summary */}
-              <div className="border border-slate-800 rounded-xl divide-y divide-slate-800 text-xs font-mono bg-slate-950/60 overflow-hidden">
-                <div className="p-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2 text-indigo-300 font-medium">
-                    <BookOpen className="w-4 h-4 text-indigo-400" />
+              <div className="border border-white/[0.08] rounded-lg divide-y divide-white/[0.06] bg-[#0c0e14] overflow-hidden">
+                <div className="p-2.5 flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-emerald-300">
+                    <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
                     PLAYBOOK.md
                   </span>
-                  <span className="text-[10px] text-indigo-400 bg-indigo-950/60 border border-indigo-800/40 px-2 py-0.5 rounded-full">
-                    11-Section Verified
+                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                    verified runbook
                   </span>
                 </div>
                 {Object.keys(artifacts).filter(k => k !== 'PLAYBOOK.md').map((file) => (
                   <div
                     key={file}
-                    className="p-3 flex items-center justify-between"
+                    className="p-2.5 flex items-center justify-between text-slate-300"
                   >
-                    <span className="flex items-center gap-2 text-slate-300">
-                      <FileCode className="w-4 h-4 text-slate-400" />
+                    <span className="flex items-center gap-2">
+                      <FileCode className="w-3.5 h-3.5 text-slate-500" />
                       {file}
                     </span>
-                    <span className="text-[10px] text-slate-500">Generated</span>
+                    <span className="text-[10px] text-zinc-500">manifest</span>
                   </div>
                 ))}
               </div>
 
-              {/* Download Bundle Button */}
+              {/* Download Bundle */}
               <button
                 onClick={handleDownloadBundle}
-                className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md ${
+                className={`w-full py-2 px-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer border ${
                   downloaded
-                    ? 'bg-slate-800 text-emerald-300 border border-emerald-500/30'
-                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/20'
+                    ? 'bg-[#1e2433] text-emerald-400 border-emerald-500/30'
+                    : 'bg-[#181d28] hover:bg-[#202736] text-white border-white/[0.12]'
                 }`}
               >
                 {downloaded ? (
                   <>
-                    <Check className="w-4 h-4 text-emerald-400" />
-                    <span>Bundle Downloaded (Click to re-download)</span>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Bundle downloaded (click to re-download)</span>
                   </>
                 ) : (
                   <>
-                    <Download className="w-4 h-4" />
-                    <span>Download Workspace ZIP Bundle</span>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Playbook & Configs (.zip)</span>
                   </>
                 )}
               </button>
 
-              {/* Confirm Delete Action */}
-              <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-3">
+              {/* Actions */}
+              <div className="pt-2 border-t border-white/[0.06] flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.04] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -143,17 +141,17 @@ export const ClosingModal: React.FC<ClosingModalProps> = ({
                   type="button"
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-rose-600/20 cursor-pointer disabled:opacity-50"
+                  className="px-3.5 py-1.5 rounded bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {deleting ? (
                     <>
-                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-red-400 border-t-transparent" />
                       <span>Deleting...</span>
                     </>
                   ) : (
                     <>
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Destroy & Teardown</span>
+                      <span>Confirm & Destroy</span>
                     </>
                   )}
                 </button>
@@ -161,27 +159,27 @@ export const ClosingModal: React.FC<ClosingModalProps> = ({
             </div>
           </div>
         ) : (
-          /* Deleted confirmation screen */
+          /* Confirmation */
           <div className="p-8 text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400 shadow-inner">
-              <Check className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
+              <Check className="w-5 h-5" />
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-base font-semibold text-slate-100">
-                Workspace Successfully Destroyed
+              <h3 className="text-sm font-semibold text-white">
+                Session Destroyed
               </h3>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
-                The container environment, temporary files, and Docker volumes have been completely removed.
+              <p className="text-xs text-slate-400 font-sans max-w-sm mx-auto leading-relaxed">
+                The container environment and temporary files have been permanently removed.
               </p>
             </div>
 
             <button
               onClick={onStartNew}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-mono font-medium transition-colors cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Start New Workspace</span>
+              <span>New Session</span>
             </button>
           </div>
         )}

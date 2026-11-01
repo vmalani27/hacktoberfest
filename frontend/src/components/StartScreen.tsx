@@ -1,17 +1,5 @@
 import React, { useState } from 'react';
-import { 
-  ArrowRight, 
-  AlertCircle, 
-  CornerDownLeft, 
-  FolderGit2, 
-  Sparkles, 
-  ShieldCheck, 
-  Terminal, 
-  FileCheck2, 
-  Box, 
-  Zap, 
-  Bug
-} from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 interface StartScreenProps {
   onStartSession: (repoUrl: string, localPath?: string) => void;
@@ -29,21 +17,21 @@ export const StartScreen: React.FC<StartScreenProps> = ({
 
   const validateUrl = (url: string): string | null => {
     const trimmed = url.trim();
-    if (!trimmed) return 'Please paste a repository URL.';
+    if (!trimmed) return 'Please enter a repository URL.';
     if (trimmed.startsWith('git@')) {
       return 'SSH URLs require private keys. Please use a public HTTPS repository URL.';
     }
     if (!trimmed.startsWith('https://')) {
-      return 'Only HTTPS repository links are supported. Public repositories only for now.';
+      return 'Only HTTPS repository URLs are supported.';
     }
     try {
       const parsed = new URL(trimmed);
       if (parsed.username || parsed.password) {
-        return 'Do not include personal access tokens or credentials in the URL. Public repositories only for now.';
+        return 'Do not include credentials in the repository URL.';
       }
       const parts = parsed.pathname.replace(/^\/|\/$/g, '').replace(/\.git$/, '').split('/');
       if (parts.length < 2 || !parts[0] || !parts[1]) {
-        return 'Enter a recognizable repository path (e.g., https://github.com/owner/repo)';
+        return 'Enter a valid repository path (e.g. https://github.com/owner/repo)';
       }
     } catch {
       return 'Please enter a valid HTTPS URL.';
@@ -62,58 +50,34 @@ export const StartScreen: React.FC<StartScreenProps> = ({
     onStartSession(repoUrl.trim());
   };
 
-  const handleSelectSample = (sampleType: 'node' | 'python' | 'broken') => {
-    setInputError(null);
-    if (sampleType === 'node') {
-      onStartSession('https://github.com/expressjs/express', 'fixtures/sample-node-app');
-    } else if (sampleType === 'python') {
-      onStartSession('https://github.com/tiangolo/fastapi', 'fixtures/sample-python-app');
-    } else {
-      onStartSession('https://github.com/broken-app/syntax-error', 'fixtures/broken-app');
-    }
-  };
-
   const displayError = inputError || externalError;
 
   return (
-    <div className="flex-1 flex flex-col justify-start items-center px-4 sm:px-6 py-10 md:py-14 bg-slate-950 text-slate-100 overflow-y-auto relative selection:bg-indigo-500/30">
-      {/* Subtle top ambient glow */}
-      <div className="absolute top-0 inset-x-0 h-96 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(99,102,241,0.2),rgba(255,255,255,0))] pointer-events-none" />
-
-      <div className="w-full max-w-3xl space-y-10 relative z-10">
+    <div className="flex-1 flex flex-col justify-start items-center px-4 sm:px-6 py-12 bg-[#090a0f] text-slate-100 overflow-y-auto select-none">
+      <div className="w-full max-w-3xl space-y-6">
         
-        {/* Hero Section */}
-        <div className="text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-950/70 border border-indigo-800/40 text-xs font-medium text-indigo-300 shadow-sm backdrop-blur-sm">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            <span>AI-Assisted Containerization & Verification</span>
-          </div>
-
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white leading-tight">
-            Turn any repository into a <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-indigo-400 via-purple-300 to-indigo-200 bg-clip-text text-transparent">
-              verified container
-            </span>
+        {/* Title Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            Repository Deployment
           </h1>
-
-          <p className="text-sm sm:text-base text-slate-400 max-w-xl mx-auto leading-relaxed">
-            Inspect source code, generate production Dockerfiles, test builds in an isolated sandbox, and compile a verified playbook with zero setup.
+          <p className="text-xs text-[#94a3b8] mt-1 font-mono">
+            Inspect source code, generate container configurations, and verify execution in an isolated Docker sandbox.
           </p>
         </div>
 
-        {/* Repository URL Input Form */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xl backdrop-blur-md">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="flex items-center justify-between px-1 text-xs">
-              <label htmlFor="repo-input" className="text-slate-300 font-medium flex items-center gap-1.5">
-                <FolderGit2 className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Git Repository URL</span>
-              </label>
-              <span className="text-[11px] text-slate-500 font-mono">
-                Public HTTPS repositories only
-              </span>
-            </div>
+        {/* Input Card */}
+        <div className="bg-[#111318] border border-white/[0.08] rounded-xl p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-mono text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Git Repository URL
+            </span>
+            <span className="font-mono text-[11px] text-slate-500">
+              HTTPS Public Repositories
+            </span>
+          </div>
 
+          <form onSubmit={handleSubmit} className="space-y-3">
             <div className="flex flex-col sm:flex-row items-center gap-2">
               <div className="relative flex-1 w-full">
                 <input
@@ -124,164 +88,71 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                     setRepoUrl(e.target.value);
                     if (inputError) setInputError(null);
                   }}
-                  placeholder="https://github.com/username/repository"
+                  placeholder="https://github.com/owner/repository"
                   disabled={loading}
                   autoFocus
                   spellCheck={false}
                   autoComplete="off"
-                  className="w-full bg-slate-950/70 border border-slate-700/80 hover:border-slate-600 focus:border-indigo-500 rounded-xl pl-4 pr-10 py-3 text-sm text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all disabled:opacity-50"
+                  className="w-full bg-[#0c0e14] border border-white/[0.08] hover:border-white/[0.14] focus:border-white/20 rounded-lg pl-3.5 pr-4 py-2.5 text-xs text-white placeholder-slate-600 font-mono focus:outline-none transition-colors disabled:opacity-50"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={loading || !repoUrl.trim()}
-                className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all duration-150 cursor-pointer disabled:cursor-not-allowed shrink-0"
+                className="w-full sm:w-auto px-4 py-2.5 bg-zinc-100 hover:bg-white text-zinc-950 disabled:bg-[#161a24] disabled:text-slate-500 rounded-lg text-xs font-mono font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
               >
                 {loading ? (
                   <>
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Launching...</span>
+                    <span className="w-3 h-3 border-2 border-zinc-400 border-t-zinc-950 rounded-full animate-spin" />
+                    <span>Provisioning...</span>
                   </>
                 ) : (
                   <>
-                    <span>Start Deploy</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <span>Initialize</span>
+                    <span>&gt;_</span>
                   </>
                 )}
               </button>
             </div>
 
             {displayError && (
-              <div className="p-2.5 rounded-lg bg-rose-950/40 border border-rose-800/50 flex items-center gap-2 text-xs text-rose-300">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <div className="p-2.5 rounded border border-red-500/20 bg-red-500/10 flex items-center gap-2 text-xs font-mono text-red-400">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>{displayError}</span>
               </div>
             )}
           </form>
         </div>
 
-        {/* Quick Launch Sample Fixtures */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs px-1">
-            <span className="font-medium text-slate-400 uppercase tracking-wider text-[11px]">
-              Or launch a pre-built sample fixture
-            </span>
-            <span className="text-slate-500 text-[11px]">One-click instant sandbox boot</span>
-          </div>
+        {/* Execution Specifications */}
+        <div className="rounded-xl border border-white/[0.08] bg-[#111318] p-5 space-y-3 font-mono text-xs">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            Sandbox & Verification Specifications
+          </span>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Sample 1: Node.js */}
-            <button
-              type="button"
-              onClick={() => handleSelectSample('node')}
-              disabled={loading}
-              className="text-left p-4 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/5 transition-all group cursor-pointer disabled:opacity-50"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
-                  <Box className="w-4 h-4" />
-                </div>
-                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/30">
-                  Port 3000
-                </span>
-              </div>
-              <h3 className="font-semibold text-sm text-slate-200 group-hover:text-white flex items-center gap-1.5">
-                Node.js Express
-                <ArrowRight className="w-3.5 h-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-indigo-400" />
-              </h3>
-              <p className="text-xs text-slate-400 mt-1 leading-normal">
-                REST service with package.json dependencies and health check endpoint.
-              </p>
-            </button>
+          <ul className="space-y-2.5 pt-1">
+            <li className="flex items-start gap-2.5">
+              <span className="text-xs font-semibold text-zinc-400 mt-0.5">&gt;</span>
+              <span className="text-zinc-300 font-sans">
+                <strong className="text-white font-medium">Sandbox Isolation:</strong> Container builds and test commands execute entirely inside a privileged Docker-in-Docker container. The host filesystem and credentials are never accessed.
+              </span>
+            </li>
 
-            {/* Sample 2: Python FastAPI */}
-            <button
-              type="button"
-              onClick={() => handleSelectSample('python')}
-              disabled={loading}
-              className="text-left p-4 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/5 transition-all group cursor-pointer disabled:opacity-50"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-lg bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform">
-                  <Zap className="w-4 h-4" />
-                </div>
-                <span className="text-[10px] font-mono text-indigo-400 bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-800/30">
-                  Port 8000
-                </span>
-              </div>
-              <h3 className="font-semibold text-sm text-slate-200 group-hover:text-white flex items-center gap-1.5">
-                Python FastAPI
-                <ArrowRight className="w-3.5 h-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-indigo-400" />
-              </h3>
-              <p className="text-xs text-slate-400 mt-1 leading-normal">
-                Async web API with requirements.txt, Uvicorn, and OpenAPI schema.
-              </p>
-            </button>
+            <li className="flex items-start gap-2.5">
+              <span className="text-xs font-semibold text-zinc-400 mt-0.5">&gt;</span>
+              <span className="text-zinc-300 font-sans">
+                <strong className="text-white font-medium">Port Probing & Proxy:</strong> Background daemon identifies active listening ports and routes traffic to a local reverse proxy for live browser preview.
+              </span>
+            </li>
 
-            {/* Sample 3: Broken App */}
-            <button
-              type="button"
-              onClick={() => handleSelectSample('broken')}
-              disabled={loading}
-              className="text-left p-4 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-rose-500/50 hover:shadow-lg hover:shadow-rose-500/5 transition-all group cursor-pointer disabled:opacity-50"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-lg bg-rose-950/60 border border-rose-800/40 flex items-center justify-center text-rose-400 group-hover:scale-105 transition-transform">
-                  <Bug className="w-4 h-4" />
-                </div>
-                <span className="text-[10px] font-mono text-rose-400 bg-rose-950/40 px-2 py-0.5 rounded border border-rose-800/30">
-                  Stop Rule
-                </span>
-              </div>
-              <h3 className="font-semibold text-sm text-slate-200 group-hover:text-white flex items-center gap-1.5">
-                Syntax Error App
-                <ArrowRight className="w-3.5 h-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-rose-400" />
-              </h3>
-              <p className="text-xs text-slate-400 mt-1 leading-normal">
-                Tests safety rails, error diagnostics, and human-in-the-loop review.
-              </p>
-            </button>
-          </div>
-        </div>
-
-        {/* Platform Feature Pillars */}
-        <div className="border-t border-slate-800/80 pt-8 space-y-4">
-          <div className="text-[11px] font-mono tracking-wider uppercase text-slate-400 font-medium">
-            Core Architecture & Capabilities
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/60 space-y-2">
-              <div className="flex items-center gap-2 text-slate-200 font-medium text-xs">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Isolated DinD Sandbox</span>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Builds and test runs execute in an isolated container sandbox with zero reach into your host system.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/60 space-y-2">
-              <div className="flex items-center gap-2 text-slate-200 font-medium text-xs">
-                <Terminal className="w-4 h-4 text-indigo-400" />
-                <span>Port Probing & Web Shell</span>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Live port discovery with reverse-proxy browser preview and fully interactive embedded PTY terminal.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/60 space-y-2">
-              <div className="flex items-center gap-2 text-slate-200 font-medium text-xs">
-                <FileCheck2 className="w-4 h-4 text-purple-400" />
-                <span>Verified 11-Tier Playbook</span>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Grounded in a strict 3-tier facts ledger (<code className="text-[11px] text-indigo-300">[Verified]</code>, <code className="text-[11px] text-purple-300">[Declared]</code>, <code className="text-[11px] text-slate-400">[Assumed]</code>) with PDF export.
-              </p>
-            </div>
-          </div>
+            <li className="flex items-start gap-2.5">
+              <span className="text-xs font-semibold text-zinc-400 mt-0.5">&gt;</span>
+              <span className="text-zinc-300 font-sans">
+                <strong className="text-white font-medium">Facts Ledger Playbook:</strong> Generates an 11-section <code className="text-sky-300 font-mono text-[11px]">PLAYBOOK.md</code> strictly grounded in verified container evidence (<code className="text-emerald-300 font-mono text-[11px]">[Verified]</code>, <code className="text-sky-300 font-mono text-[11px]">[Declared]</code>, <code className="text-slate-400 font-mono text-[11px]">[Assumed]</code>).
+              </span>
+            </li>
+          </ul>
         </div>
 
       </div>

@@ -254,7 +254,7 @@ export const App: React.FC = () => {
     : session?.repo_path?.split(/[\\/]/).pop() || 'repository';
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30 overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#090a0f] text-slate-100 font-sans selection:bg-slate-700/50 overflow-hidden">
       
       {/* Persistent Global Studio Header with Per-Repo Metadata */}
       <Header

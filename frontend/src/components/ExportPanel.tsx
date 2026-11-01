@@ -8,7 +8,6 @@ interface ExportPanelProps {
 
 export const ExportPanel: React.FC<ExportPanelProps> = ({ artifacts, onClose }) => {
   const fileNames = Object.keys(artifacts);
-  // Default to PLAYBOOK.md if available, otherwise first file
   const defaultFile = fileNames.includes('PLAYBOOK.md') ? 'PLAYBOOK.md' : fileNames[0] || '';
   const [selectedFile, setSelectedFile] = useState<string>(defaultFile);
   const [copied, setCopied] = useState(false);
@@ -60,21 +59,21 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ artifacts, onClose }) 
   };
 
   return (
-    <aside className="w-full md:w-[460px] border-l border-slate-800 bg-slate-900 flex flex-col h-full shadow-2xl z-20">
-      <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
+    <aside className="w-full md:w-[460px] border-l border-white/[0.08] bg-[#111318] flex flex-col h-full shadow-2xl z-20 font-mono text-xs select-none">
+      <div className="h-11 px-4 border-b border-white/[0.08] flex items-center justify-between bg-[#151922]">
         <div className="flex items-center gap-2">
           {activeFile === 'PLAYBOOK.md' ? (
             <BookOpen className="w-4 h-4 text-emerald-400" />
           ) : (
-            <FileCode className="w-4 h-4 text-indigo-400" />
+            <FileCode className="w-4 h-4 text-sky-400" />
           )}
-          <h2 className="text-xs font-semibold text-slate-100 uppercase tracking-wider">
-            Verified Deliverables
-          </h2>
+          <span className="font-semibold text-white tracking-tight uppercase text-[11px]">
+            Playbook & Deliverables
+          </span>
         </div>
         <button
           onClick={onClose}
-          className="p-1 text-slate-400 hover:text-slate-200 rounded hover:bg-slate-800 transition"
+          className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.04] transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
@@ -82,63 +81,61 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ artifacts, onClose }) 
 
       {fileNames.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500">
-          <BookOpen className="w-8 h-8 text-slate-600 mb-2 stroke-1" />
-          <p className="text-xs font-medium text-slate-400">Playbook and deployment files</p>
-          <p className="text-[11px] text-slate-600 mt-1">
-            As your container is tested, the verified playbook and configurations will compile here.
+          <BookOpen className="w-8 h-8 text-zinc-600 mb-2 stroke-1" />
+          <p className="text-xs text-slate-400 font-sans">No deliverables generated yet.</p>
+          <p className="text-[11px] text-zinc-600 mt-1 font-sans">
+            As commands are verified, the playbook and configs will populate here.
           </p>
         </div>
       ) : (
         <>
-          <div className="flex border-b border-slate-800 bg-slate-950/60 px-2 py-1.5 gap-1.5 overflow-x-auto">
+          <div className="flex border-b border-white/[0.08] bg-[#0c0e14] px-2 py-1.5 gap-1.5 overflow-x-auto">
             {fileNames.map((fname) => (
               <button
                 key={fname}
                 onClick={() => setSelectedFile(fname)}
-                className={`px-3 py-1 text-xs font-mono rounded-lg transition-all flex items-center gap-1.5 ${
+                className={`px-2.5 py-1 text-xs font-mono rounded transition-colors flex items-center gap-1.5 cursor-pointer ${
                   activeFile === fname
-                    ? fname === 'PLAYBOOK.md'
-                      ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 font-semibold'
-                      : 'bg-slate-800 text-indigo-400 border border-slate-700 font-medium'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-[#1e2433] text-white border border-white/[0.12] font-semibold'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
-                {fname === 'PLAYBOOK.md' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                {fname === 'PLAYBOOK.md' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
                 <span>{fname}</span>
               </button>
             ))}
           </div>
 
-          <div className="flex-1 p-3 overflow-auto bg-[#070b14]">
-            <pre className="p-3 bg-slate-950 rounded-xl border border-slate-800/80 font-mono text-xs text-slate-200 h-full overflow-auto leading-relaxed whitespace-pre-wrap selection:bg-indigo-500/30">
+          <div className="flex-1 p-3 overflow-auto bg-[#090a0f]">
+            <pre className="p-3 bg-[#111318] rounded-lg border border-white/[0.08] font-mono text-xs text-slate-200 h-full overflow-auto leading-relaxed whitespace-pre-wrap selection:bg-slate-700/50">
               {activeContent}
             </pre>
           </div>
 
-          <div className="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between gap-2">
-            <span className="text-[11px] text-slate-500">
-              {activeFile === 'PLAYBOOK.md' ? 'Grounded with [Verified] tags' : 'Ready to deploy'}
+          <div className="p-3 border-t border-white/[0.08] bg-[#151922] flex items-center justify-between gap-2">
+            <span className="text-[10px] text-zinc-500 font-mono">
+              {activeFile === 'PLAYBOOK.md' ? 'Grounded in [Verified] tags' : 'Ready to export'}
             </span>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePrint}
-                title="Print or Save as PDF"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition"
+                title="Print or export as PDF"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-[#181d28] hover:bg-[#202736] text-slate-300 hover:text-white rounded border border-white/[0.08] transition-colors cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>PDF / Print</span>
               </button>
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-[#181d28] hover:bg-[#202736] text-slate-300 hover:text-white rounded border border-white/[0.08] transition-colors cursor-pointer"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copied' : 'Copy'}</span>
               </button>
               <button
                 onClick={handleDownload}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg shadow-md transition"
+                className="flex items-center gap-1.5 px-3 py-1 text-xs font-mono bg-zinc-100 hover:bg-white text-zinc-950 font-medium rounded transition-colors cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Download</span>
